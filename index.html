@@ -608,9 +608,48 @@
     const COMBAT_CENTER_Y_RATIO = 0.38;
 
     function getCharHeight() {
-      // 머리 꼭대기 ≈ 패링 아크 상단(PARRY_RADIUS) — 작았던(168)~큰(320) 중간 ≈ 210
-      const hitboxH = Math.round(PARRY_RADIUS / (1 - COMBAT_CENTER_Y_RATIO));
-      return Math.min(hitboxH, H * 0.32);
+      const hitboxH = Math.round(PARRY_RADIUS / (1 - COMBAT_CENTER_Y_RATIO) * 0.88);
+      return Math.min(hitboxH, H * 0.30);
+    }
+
+    function getCharHeadTopY(rect) {
+      const ratio = rect.img && rect.img.headTopRatio != null ? rect.img.headTopRatio : 0.12;
+      return rect.y + rect.h * ratio;
+    }
+
+    function computeHeadTopRatio(img) {
+      return new Promise((resolve) => {
+        try {
+          const w = img.naturalWidth;
+          const h = img.naturalHeight;
+          if (!w || !h) {
+            resolve(0.12);
+            return;
+          }
+          const c = document.createElement('canvas');
+          c.width = w;
+          c.height = h;
+          const cx = c.getContext('2d');
+          cx.drawImage(img, 0, 0);
+          const { data } = cx.getImageData(0, 0, w, h);
+          let minY = h;
+          for (let y = 0; y < h; y++) {
+            for (let x = 0; x < w; x++) {
+              const i = (y * w + x) * 4;
+              if (data[i + 3] < 20) continue;
+              const lum = (data[i] + data[i + 1] + data[i + 2]) / 3;
+              const spread = Math.max(data[i], data[i + 1], data[i + 2]) - Math.min(data[i], data[i + 1], data[i + 2]);
+              if (lum < 220 || spread >= 30) {
+                minY = Math.min(minY, y);
+                break;
+              }
+            }
+          }
+          resolve(minY < h ? minY / h : 0.12);
+        } catch (err) {
+          resolve(0.12);
+        }
+      });
     }
 
     function getBodyHitRadius() {
@@ -621,10 +660,11 @@
     function getComboAnchor() {
       const cc = getCombatCenter();
       const rect = getCharDrawRect();
+      const headTopY = getCharHeadTopY(rect);
       const clearance = Math.max(COMBO_HEAD_CLEARANCE_MIN, rect.h * COMBO_HEAD_CLEARANCE_RATIO);
       return {
         x: cc.x,
-        stackBottomY: rect.y - clearance
+        stackBottomY: headTopY - clearance
       };
     }
 
@@ -688,10 +728,11 @@
     function getCharDrawRect() {
       const img = getCurrentCharImg();
       const h = getCharHeight();
-      const ink = getInkRect(img, null);
-      const w = (ink.sw / ink.sh) * h;
+      const srcW = img && (img.naturalWidth || img.width);
+      const srcH = img && (img.naturalHeight || img.height);
+      const w = srcW && srcH ? (srcW / srcH) * h : h * 0.55;
       const c = getCombatCenter();
-      return { x: c.x - w * 0.5, y: player.y - h, w, h, img, ink };
+      return { x: c.x - w * 0.5, y: player.y - h, w, h, img };
     }
 
     function resize() {
@@ -1201,8 +1242,11 @@
       for (const [key, src] of Object.entries(map)) {
         const img = new Image();
         img.onload = () => {
-          processInkImageAsync(img, 210)
-            .then((trimmed) => { charImgs[key] = trimmed; })
+          computeHeadTopRatio(img)
+            .then((ratio) => {
+              img.headTopRatio = ratio;
+              charImgs[key] = img;
+            })
             .catch(() => { charImgs[key] = img; })
             .finally(onDone);
         };
@@ -1534,8 +1578,7 @@
       const nw = rect.img && (rect.img.naturalWidth || rect.img.width);
       const nh = rect.img && (rect.img.naturalHeight || rect.img.height);
       if (rect.img && nw && nh) {
-        const ink = rect.ink || getInkRect(rect.img, null);
-        drawInkImageSrc(rect.img, ink, rect.x, rect.y, rect.w, rect.h);
+        ctx.drawImage(rect.img, rect.x, rect.y, rect.w, rect.h);
       } else {
         drawPlayerFallbackDot();
       }
