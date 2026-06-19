@@ -1,0 +1,1751 @@
+<!DOCTYPE html>
+<html lang="ko">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>화살베기</title>
+  <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
+  <style>
+    * { margin: 0; padding: 0; box-sizing: border-box; }
+    body {
+      background: #fff;
+      overflow: hidden;
+      font-family: 'Segoe UI', 'Malgun Gothic', sans-serif;
+      user-select: none;
+    }
+    #game-wrap {
+      position: relative;
+      width: 100vw;
+      height: 100vh;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+    }
+    canvas {
+      display: block;
+      cursor: default;
+    }
+    #ui-overlay.hidden {
+      display: none;
+    }
+    #ui-overlay {
+      position: absolute;
+      inset: 0;
+      pointer-events: none;
+      display: flex;
+      flex-direction: column;
+      justify-content: space-between;
+      padding: 24px 32px;
+    }
+    .hud-top {
+      display: flex;
+      justify-content: space-between;
+      align-items: flex-start;
+      gap: 24px;
+    }
+    .hp-bar-wrap {
+      width: 220px;
+      display: flex;
+      flex-direction: column;
+      gap: 10px;
+    }
+    .hud-stat {
+      display: flex;
+      flex-direction: column;
+      gap: 6px;
+    }
+    .hud-label {
+      color: #111;
+      font-size: 11px;
+      letter-spacing: 4px;
+      line-height: 1;
+    }
+    .hud-blocks {
+      display: flex;
+      align-items: stretch;
+      gap: 6px;
+      width: 220px;
+    }
+    .hud-block {
+      flex: 1;
+      height: 10px;
+      border: 1px solid #111;
+      background: #111;
+      box-sizing: border-box;
+      transition: background 0.25s ease;
+    }
+    .stamina-row .hud-block {
+      height: 8px;
+      background: #555;
+    }
+    .hud-block.empty {
+      background: #fff;
+    }
+    .stamina-row.empty .hud-label {
+      color: #888;
+    }
+    .cut-count-wrap {
+      width: 220px;
+      min-height: 62px;
+      display: flex;
+      align-items: flex-end;
+      justify-content: flex-end;
+    }
+    .cut-count-line {
+      display: flex;
+      align-items: baseline;
+      justify-content: flex-end;
+      gap: 10px;
+      line-height: 1;
+      width: 100%;
+    }
+    .cut-count-label {
+      color: #111;
+      font-size: 11px;
+      letter-spacing: 4px;
+    }
+    .cut-count-value {
+      color: #111;
+      font-size: 34px;
+      letter-spacing: 4px;
+      line-height: 1;
+      font-variant-numeric: tabular-nums;
+    }
+    .combo-box {
+      display: none;
+    }
+    .hud-bottom {
+      text-align: center;
+      color: #888;
+      font-size: 11px;
+      letter-spacing: 3px;
+    }
+    #flash-overlay { display: none; }
+    #game-over {
+      position: absolute;
+      inset: 0;
+      background: rgba(255, 255, 255, 0.92);
+      display: none;
+      flex-direction: column;
+      align-items: center;
+      justify-content: center;
+      pointer-events: all;
+      z-index: 20;
+    }
+    #game-over.show { display: flex; }
+    .game-over-panel {
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+      gap: 18px;
+      width: min(420px, 88vw);
+      padding: 0 16px;
+    }
+    #game-over h2 {
+      color: #111;
+      font-size: clamp(28px, 6vw, 40px);
+      letter-spacing: 8px;
+      margin: 0;
+    }
+    #game-over .final-score {
+      color: #111;
+      font-size: 11px;
+      letter-spacing: 4px;
+      margin: 0;
+      opacity: 0.55;
+    }
+    .game-over-actions {
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+      gap: min(2vh, 18px);
+      width: min(52vw, 480px);
+      margin-top: min(3vh, 28px);
+    }
+    #game-over .game-over-btn {
+      width: 100%;
+      height: min(9vh, 76px);
+      border: none;
+      background: transparent;
+      color: #111;
+      font-family: inherit;
+      font-size: 11px;
+      font-weight: 400;
+      letter-spacing: 4px;
+      cursor: pointer;
+      padding: 0;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      opacity: 0.45;
+      transition: opacity 0.2s ease;
+    }
+    #game-over .game-over-btn:hover {
+      opacity: 1;
+    }
+    #game-over .game-over-btn:active {
+      opacity: 0.3;
+    }
+    #main-menu {
+      position: absolute;
+      inset: 0;
+      background: #fff;
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+      justify-content: center;
+      z-index: 15;
+      pointer-events: auto;
+    }
+    #main-menu.hidden {
+      display: none;
+    }
+    .menu-stack {
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+      gap: min(3vh, 28px);
+      width: 100%;
+      padding: 0 5vw;
+      box-sizing: border-box;
+    }
+    #main-menu .menu-title-area {
+      width: min(66vw, 640px);
+      height: min(26vh, 260px);
+      display: flex;
+      align-items: center;
+      justify-content: center;
+    }
+    #main-menu .menu-title {
+      margin: 0;
+      color: #111;
+      font-size: min(22vh, 13vw, 96px);
+      font-weight: 300;
+      letter-spacing: 0.06em;
+      line-height: 1.05;
+      text-align: center;
+    }
+    #main-menu .menu-buttons {
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+      gap: min(2vh, 18px);
+      width: min(52vw, 480px);
+    }
+    #main-menu .menu-btn {
+      width: 100%;
+      height: min(9vh, 76px);
+      border: none;
+      background: transparent;
+      color: #111;
+      font-family: inherit;
+      font-size: 11px;
+      font-weight: 400;
+      letter-spacing: 4px;
+      cursor: pointer;
+      padding: 0;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      opacity: 0.45;
+      transition: opacity 0.2s ease;
+    }
+    #main-menu .menu-btn:hover {
+      opacity: 1;
+    }
+    #main-menu .menu-btn:active {
+      opacity: 0.3;
+    }
+    #ranking-screen {
+      position: absolute;
+      inset: 0;
+      background: #fff;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      z-index: 30;
+      pointer-events: auto;
+    }
+    #ranking-screen.hidden { display: none; }
+
+    .ranking-inner {
+      width: min(520px, 92vw);
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+      gap: 20px;
+    }
+
+    .ranking-title {
+      font-size: clamp(28px, 6vw, 44px);
+      letter-spacing: 8px;
+      color: #111;
+      font-weight: 400;
+    }
+
+    .ranking-table-wrap {
+      width: 100%;
+      border: 1px solid #111;
+      overflow: hidden;
+    }
+
+    .ranking-table {
+      width: 100%;
+      border-collapse: collapse;
+      font-size: clamp(12px, 2.2vw, 15px);
+      letter-spacing: 1px;
+    }
+
+    .ranking-table th,
+    .ranking-table td {
+      padding: 10px 14px;
+      text-align: center;
+      border-bottom: 1px solid #e0e0e0;
+      color: #111;
+    }
+
+    .ranking-table th {
+      font-weight: 600;
+      letter-spacing: 3px;
+      font-size: clamp(10px, 1.8vw, 12px);
+      border-bottom: 1px solid #111;
+    }
+
+    .ranking-table tbody tr:last-child td { border-bottom: none; }
+    .ranking-table tbody tr:nth-child(1) td { font-weight: 700; }
+
+    .ranking-loading {
+      color: #aaa;
+      padding: 24px;
+      letter-spacing: 2px;
+      font-size: 12px;
+    }
+
+    .rank-1 { color: #b8860b; font-weight: 700; }
+    .rank-2 { color: #666; font-weight: 600; }
+    .rank-3 { color: #a0522d; font-weight: 600; }
+
+    .ranking-submit {
+      display: flex;
+      gap: 10px;
+      width: 100%;
+    }
+
+    #nickname-input {
+      flex: 1;
+      border: 1px solid #111;
+      background: #fff;
+      color: #111;
+      font-size: 14px;
+      letter-spacing: 2px;
+      padding: 10px 14px;
+      outline: none;
+      font-family: inherit;
+    }
+    #nickname-input:focus { border-color: #555; }
+
+    #btn-submit-score {
+      border: 1px solid #111;
+      background: #111;
+      color: #fff;
+      font-size: 13px;
+      letter-spacing: 3px;
+      padding: 10px 20px;
+      cursor: pointer;
+      font-family: inherit;
+      transition: opacity 0.15s;
+    }
+    #btn-submit-score:hover { opacity: 0.75; }
+    #btn-submit-score:disabled {
+      background: #ccc;
+      border-color: #ccc;
+      cursor: default;
+    }
+
+    .ranking-back-btn {
+      background: transparent;
+      border: none;
+      color: #888;
+      font-size: 12px;
+      letter-spacing: 3px;
+      cursor: pointer;
+      font-family: inherit;
+      padding: 4px 0;
+    }
+    .ranking-back-btn:hover { color: #111; }
+  </style>
+</head>
+<body>
+  <div id="game-wrap">
+    <canvas id="game"></canvas>
+    <div id="flash-overlay"></div>
+    <div id="ui-overlay" class="hidden">
+      <div class="hud-top">
+        <div class="hp-bar-wrap">
+          <div class="hud-stat">
+            <div class="hud-label">HP</div>
+            <div class="hud-blocks" id="hp-blocks">
+              <span class="hud-block"></span>
+              <span class="hud-block"></span>
+            </div>
+          </div>
+          <div class="hud-stat stamina-row" id="stamina-wrap">
+            <div class="hud-label">STAMINA</div>
+            <div class="hud-blocks" id="stamina-blocks">
+              <span class="hud-block"></span>
+              <span class="hud-block"></span>
+              <span class="hud-block"></span>
+            </div>
+          </div>
+        </div>
+        <div class="cut-count-wrap">
+          <div class="cut-count-line">
+            <span class="cut-count-label">COUNT</span>
+            <span class="cut-count-value" id="cut-count">0</span>
+          </div>
+        </div>
+      </div>
+      <div class="hud-bottom">LEFT CLICK / SPACE — PARRY</div>
+    </div>
+    <div id="game-over">
+      <div class="game-over-panel">
+        <h2>GAME OVER</h2>
+        <p class="final-score" id="final-score">카운트 : 0개  최대콤보 : 0개</p>
+        <button id="btn-goto-rank" type="button" class="ranking-back-btn">랭킹 보기</button>
+        <div class="game-over-actions">
+          <button class="game-over-btn" id="btn-retry" type="button">다시하기</button>
+        </div>
+      </div>
+    </div>
+    <div id="main-menu">
+      <div class="menu-stack">
+        <div class="menu-title-area">
+          <h1 class="menu-title">화살 베기</h1>
+        </div>
+        <div class="menu-buttons">
+          <button class="menu-btn" id="btn-start" type="button">시작하기</button>
+          <button class="menu-btn" id="btn-rank" type="button">랭킹보기</button>
+        </div>
+      </div>
+    </div>
+    <div id="ranking-screen" class="hidden">
+      <div class="ranking-inner">
+        <h2 class="ranking-title">랭킹</h2>
+
+        <div class="ranking-table-wrap">
+          <table class="ranking-table">
+            <thead>
+              <tr>
+                <th>순위</th>
+                <th>닉네임</th>
+                <th>카운트</th>
+                <th>콤보</th>
+              </tr>
+            </thead>
+            <tbody id="ranking-body">
+              <tr><td colspan="4" class="ranking-loading">불러오는 중...</td></tr>
+            </tbody>
+          </table>
+        </div>
+
+        <div class="ranking-submit">
+          <input
+            id="nickname-input"
+            type="text"
+            placeholder="닉네임"
+            maxlength="12"
+            autocomplete="off"
+          />
+          <button id="btn-submit-score" type="button">등록하기</button>
+        </div>
+
+        <button id="btn-ranking-back" type="button" class="ranking-back-btn">← 뒤로</button>
+      </div>
+    </div>
+  </div>
+
+  <script>
+  (function () {
+    'use strict';
+
+    /*
+      Supabase에서 아래 SQL을 실행해서 테이블을 만들 것:
+
+      create table rankings (
+        id bigint generated always as identity primary key,
+        nickname text not null,
+        count int not null default 0,
+        combo int not null default 0,
+        created_at timestamptz default now()
+      );
+
+      alter table rankings enable row level security;
+
+      create policy "누구나 읽기 가능"
+        on rankings for select using (true);
+
+      create policy "누구나 삽입 가능"
+        on rankings for insert with check (true);
+    */
+
+    const SUPABASE_URL = 'https://hneozwrttqvurhexpofe.supabase.co';
+    const SUPABASE_ANON_KEY = 'sb_publishable_H_EKJPrWsxEtnq6CMbrEPg_CX0YPXnM';
+
+    let supabase = null;
+    function initSupabase() {
+      if (supabase) return supabase;
+      if (!window.supabase) return null;
+      if (!SUPABASE_URL.includes('supabase.co') || !SUPABASE_ANON_KEY || SUPABASE_ANON_KEY.startsWith('YOUR_')) {
+        return null;
+      }
+      try {
+        supabase = window.supabase.createClient(SUPABASE_URL, SUPABASE_ANON_KEY);
+      } catch (err) {
+        console.warn('Supabase init failed:', err);
+      }
+      return supabase;
+    }
+
+    let scoreSubmitted = false;
+    let currentCount = 0;
+
+    const canvas = document.getElementById('game');
+    const ctx = canvas.getContext('2d');
+    const hpBlocksEl = document.getElementById('hp-blocks');
+    const staminaBlocksEl = document.getElementById('stamina-blocks');
+    const staminaWrap = document.getElementById('stamina-wrap');
+    const cutCountEl = document.getElementById('cut-count');
+    const flashOverlay = document.getElementById('flash-overlay');
+    const gameOverEl = document.getElementById('game-over');
+    const finalScoreEl = document.getElementById('final-score');
+    const btnRetry = document.getElementById('btn-retry');
+    const btnGotoRank = document.getElementById('btn-goto-rank');
+    const mainMenuEl = document.getElementById('main-menu');
+    const uiOverlayEl = document.getElementById('ui-overlay');
+    const btnStart = document.getElementById('btn-start');
+    const btnRank = document.getElementById('btn-rank');
+    const rankingScreenEl = document.getElementById('ranking-screen');
+    const nicknameInput = document.getElementById('nickname-input');
+    const btnSubmitScore = document.getElementById('btn-submit-score');
+    const btnRankingBack = document.getElementById('btn-ranking-back');
+
+    const GameState = {
+      MAIN_MENU: 'MAIN_MENU',
+      PLAYING: 'PLAYING'
+    };
+
+    const PARRY_RADIUS = 130;
+    const PLAYER_HIT_RADIUS = 14;
+    const PARRY_WINDOW = 0.14;
+    const GUIDE_SHOW_TIME = 3;
+    const ATTACKS_START_TIME = GUIDE_SHOW_TIME;
+    const MAX_HP = 2;
+    const HIT_DAMAGE = 1;
+    const MAX_STAMINA = 3;
+    const STAMINA_REGEN_INTERVAL = 3;
+    const STAMINA_REGEN_AMOUNT = 1;
+    const STAMINA_SWING_COST = 1;
+
+    let W, H, cx, cy;
+    let gameState = GameState.MAIN_MENU;
+    let running = false;
+    let gameOver = false;
+    let hp = MAX_HP;
+    let stamina = MAX_STAMINA;
+    let staminaRegenTimer = 0;
+    let combo = 0;
+    let maxCombo = 0;
+    let cutCount = 0;
+    let parryActive = false;
+    let parryTimer = 0;
+    let screenFlash = 0;
+    let spawnTimer = 0;
+    let spawnInterval = 2;
+    let difficulty = 1;
+    let lastTime = 0;
+    let gameTime = 0;
+    let comboPop = 0;
+
+    let charState = 'idle';
+    let charTimer = 0;
+    let charShakeTimer = 0;
+    let charPattern = 'horiz';
+    let charReturnTimer = 0;
+    const charImgs = {
+      idle: null, draw: null,
+      diag_L: null, diag_R: null,
+      horiz: null, up: null, down_pre: null, down: null,
+      loaded: false
+    };
+
+    const UI_FONT = '"Segoe UI", "Malgun Gothic", sans-serif';
+    const UI_LABEL_PX = 11;
+    const UI_LABEL_TRACK = 4;
+    const COMBO_DIGIT_GAP_RATIO = 0.085;
+    const COMBO_MULTI_SCALE = { 2: 0.92, 3: 0.84, 4: 0.76 };
+    const COMBO_STACK_GAP_MIN = 10;
+    const COMBO_STACK_GAP_RATIO = 0.075;
+    const COMBO_POP_DURATION = 0.38;
+    const COMBO_SIZE_SCALE = 0.7;
+    const COMBO_HEAD_CLEARANCE_RATIO = 0.28;
+    const COMBO_HEAD_CLEARANCE_MIN = 56;
+    const INK_PAD_RATIO = 0.018;
+
+    const attacks = [];
+    const particles = [];
+    const brokenSticks = [];
+    const slashes = [];
+
+    const SLASH_VISUAL = {
+      down:   { angle: Math.PI * 0.5,  len: 0.85 },
+      diag_L: { angle: Math.PI * 0.75, len: 0.9  },
+      diag_R: { angle: Math.PI * 0.25, len: 0.9  },
+      horiz:  { angle: 0,              len: 0.95 }
+    };
+
+    const player = { x: 0, y: 0 };
+
+    function getCharHeight() {
+      return Math.min(H * 0.38, 320);
+    }
+
+    function getBodyHitRadius() {
+      // 표시 크기와 별도 — 가슴~머리 중심만 맞는 작은 원
+      return PLAYER_HIT_RADIUS;
+    }
+
+    function getComboAnchor() {
+      const cc = getCombatCenter();
+      const rect = getCharDrawRect();
+      const clearance = Math.max(COMBO_HEAD_CLEARANCE_MIN, rect.h * COMBO_HEAD_CLEARANCE_RATIO);
+      return {
+        x: cc.x,
+        stackBottomY: rect.y - clearance
+      };
+    }
+
+    function attachPresetCenter(ink, preset) {
+      if (preset && preset.cx != null) ink.cx = preset.cx;
+      return ink;
+    }
+
+    function getCombatCenter() {
+      const h = getCharHeight();
+      const shakeX = charShakeTimer > 0 ? Math.sin(charShakeTimer * 38) * 5 : 0;
+      return {
+        x: player.x + shakeX,
+        y: player.y - h * 0.44,
+        shakeX
+      };
+    }
+
+    function getFirstAvailableCharImg() {
+      return charImgs.idle || charImgs.draw || charImgs.horiz
+        || charImgs.diag_L || charImgs.diag_R || charImgs.up || charImgs.down_pre || charImgs.down || null;
+    }
+
+    function getCurrentCharImg() {
+      let img;
+      switch (charState) {
+        case 'draw':   img = charImgs.draw; break;
+        case 'slash':
+          if (charPattern === 'down')   img = charImgs.up;
+          else if (charPattern === 'diag_L') img = charImgs.diag_L;
+          else if (charPattern === 'diag_R') img = charImgs.diag_R;
+          else img = charImgs.horiz;
+          break;
+        case 'impact':
+          if (charPattern === 'down')   img = charImgs.down;
+          else if (charPattern === 'diag_L') img = charImgs.diag_L;
+          else if (charPattern === 'diag_R') img = charImgs.diag_R;
+          else img = charImgs.horiz;
+          break;
+        case 'hit':
+        case 'return':
+          img = charImgs.idle;
+          break;
+        default:
+          img = charImgs.idle;
+      }
+      return img || getFirstAvailableCharImg();
+    }
+
+    function drawPlayerFallbackDot() {
+      const cc = getCombatCenter();
+      ctx.save();
+      ctx.translate(cc.x, cc.y);
+      ctx.fillStyle = '#111';
+      ctx.beginPath();
+      ctx.arc(0, 0, getBodyHitRadius() * 0.45, 0, Math.PI * 2);
+      ctx.fill();
+      ctx.restore();
+    }
+
+    function getCharDrawRect() {
+      const img = getCurrentCharImg();
+      const h = getCharHeight();
+      const ink = getInkRect(img, null);
+      const w = (ink.sw / ink.sh) * h;
+      const c = getCombatCenter();
+      return { x: c.x - w * 0.5, y: player.y - h, w, h, img, ink };
+    }
+
+    function resize() {
+      W = canvas.width = window.innerWidth;
+      H = canvas.height = window.innerHeight;
+      cx = W / 2;
+      cy = H - 90;
+      player.x = cx;
+      player.y = cy;
+    }
+
+    function setGameState(state) {
+      gameState = state;
+      mainMenuEl.classList.toggle('hidden', state !== GameState.MAIN_MENU);
+      uiOverlayEl.classList.toggle('hidden', state !== GameState.PLAYING);
+      canvas.style.cursor = state === GameState.PLAYING ? 'crosshair' : 'default';
+    }
+
+    function startGame() {
+      setGameState(GameState.PLAYING);
+      resetGame();
+      lastTime = performance.now();
+    }
+
+    function isKnockoutPixel(r, g, b, a, threshold) {
+      if (a <= 8) return true;
+      const spread = Math.max(r, g, b) - Math.min(r, g, b);
+      if (spread >= 42) return false;
+      return (r + g + b) / 3 >= threshold;
+    }
+
+    function applyWhiteKnockout(data, whiteThreshold = 235) {
+      for (let i = 0; i < data.length; i += 4) {
+        if (isKnockoutPixel(data[i], data[i + 1], data[i + 2], data[i + 3], whiteThreshold)) {
+          data[i + 3] = 0;
+        }
+      }
+    }
+
+    function floodRemoveBackground(data, w, h, threshold) {
+      const visited = new Uint8Array(w * h);
+      const stack = [];
+      function tryPush(x, y) {
+        if (x < 0 || y < 0 || x >= w || y >= h) return;
+        const idx = y * w + x;
+        if (visited[idx]) return;
+        const i = idx * 4;
+        if (!isKnockoutPixel(data[i], data[i + 1], data[i + 2], data[i + 3], threshold)) return;
+        visited[idx] = 1;
+        stack.push(x, y);
+      }
+      for (let x = 0; x < w; x++) {
+        tryPush(x, 0);
+        tryPush(x, h - 1);
+      }
+      for (let y = 0; y < h; y++) {
+        tryPush(0, y);
+        tryPush(w - 1, y);
+      }
+      while (stack.length) {
+        const x = stack.pop();
+        const y = stack.pop();
+        const i = (y * w + x) * 4;
+        data[i + 3] = 0;
+        tryPush(x + 1, y);
+        tryPush(x - 1, y);
+        tryPush(x, y + 1);
+        tryPush(x, y - 1);
+      }
+    }
+
+    function stripNearWhitePixels(data, lumThreshold = 215) {
+      for (let i = 0; i < data.length; i += 4) {
+        if (data[i + 3] <= 8) continue;
+        const lum = (data[i] + data[i + 1] + data[i + 2]) / 3;
+        if (lum >= lumThreshold) data[i + 3] = 0;
+      }
+    }
+
+    function getInkPad(srcW, srcH) {
+      return Math.max(8, Math.round(Math.max(srcW, srcH) * INK_PAD_RATIO));
+    }
+
+    function padInkRect(ink, srcW, srcH, extraPad) {
+      const pad = extraPad != null ? extraPad : getInkPad(srcW, srcH);
+      const sx = Math.max(0, ink.sx - pad);
+      const sy = Math.max(0, ink.sy - pad);
+      const sw = Math.min(srcW - sx, ink.sw + pad * 2);
+      const sh = Math.min(srcH - sy, ink.sh + pad * 2);
+      return { sx, sy, sw, sh, srcW, srcH };
+    }
+
+    function getInkBounds(data, w, h, pad, lumMax = 215) {
+      let minX = w;
+      let minY = h;
+      let maxX = -1;
+      let maxY = -1;
+      for (let y = 0; y < h; y++) {
+        for (let x = 0; x < w; x++) {
+          const i = (y * w + x) * 4;
+          if (data[i + 3] <= 12) continue;
+          const lum = (data[i] + data[i + 1] + data[i + 2]) / 3;
+          if (lum >= lumMax) continue;
+          if (x < minX) minX = x;
+          if (y < minY) minY = y;
+          if (x > maxX) maxX = x;
+          if (y > maxY) maxY = y;
+        }
+      }
+      if (maxX < minX) return null;
+      minX = Math.max(0, minX - pad);
+      minY = Math.max(0, minY - pad);
+      maxX = Math.min(w - 1, maxX + pad);
+      maxY = Math.min(h - 1, maxY + pad);
+      return { minX, minY, tw: maxX - minX + 1, th: maxY - minY + 1 };
+    }
+
+    function cropOpaqueBounds(data, w, h, pad) {
+      return getInkBounds(data, w, h, pad, 255);
+    }
+
+    function applyInkRect(img, bounds, srcW, srcH, cropped) {
+      if (!img || !bounds) return img;
+      const raw = cropped
+        ? { sx: 0, sy: 0, sw: bounds.tw, sh: bounds.th }
+        : { sx: bounds.minX, sy: bounds.minY, sw: bounds.tw, sh: bounds.th };
+      img.inkRect = padInkRect(raw, cropped ? bounds.tw : srcW, cropped ? bounds.th : srcH);
+      return img;
+    }
+
+    function getInkRect(img, sheetFallback) {
+      if (img && img.inkRect) return img.inkRect;
+      const srcW = img.naturalWidth || img.width || 1;
+      const srcH = img.naturalHeight || img.height || 1;
+      if (sheetFallback && sheetFallback.srcW === srcW && sheetFallback.srcH === srcH) {
+        return attachPresetCenter(padInkRect(sheetFallback, srcW, srcH), sheetFallback);
+      }
+      return { sx: 0, sy: 0, sw: srcW, sh: srcH, srcW, srcH };
+    }
+
+    function drawInkImageSrc(img, ink, dx, dy, dw, dh) {
+      if (!img || !ink) return;
+      ctx.save();
+      ctx.globalCompositeOperation = 'multiply';
+      ctx.drawImage(img, ink.sx, ink.sy, ink.sw, ink.sh, dx, dy, dw, dh);
+      ctx.restore();
+    }
+
+    function drawInkImage(img, x, y, w, h) {
+      drawInkImageSrc(img, getInkRect(img, null), x, y, w, h);
+    }
+
+    function canvasToImage(canvas) {
+      return new Promise((resolve) => {
+        const out = new Image();
+        out.onload = () => resolve(out);
+        out.onerror = () => resolve(null);
+        out.src = canvas.toDataURL('image/png');
+      });
+    }
+
+    function processInkImageAsync(img, threshold = 210) {
+      return new Promise((resolve) => {
+        try {
+          const w = img.naturalWidth;
+          const h = img.naturalHeight;
+          if (!w || !h) {
+            resolve(img);
+            return;
+          }
+
+          const canvas = document.createElement('canvas');
+          canvas.width = w;
+          canvas.height = h;
+          const ctx = canvas.getContext('2d');
+          ctx.drawImage(img, 0, 0);
+          const frame = ctx.getImageData(0, 0, w, h);
+
+          const cropPad = getInkPad(w, h);
+
+          floodRemoveBackground(frame.data, w, h, threshold);
+          applyWhiteKnockout(frame.data, threshold);
+          stripNearWhitePixels(frame.data, threshold + 8);
+
+          let bounds = getInkBounds(frame.data, w, h, cropPad, threshold + 8);
+          if (!bounds) {
+            applyWhiteKnockout(frame.data, 198);
+            stripNearWhitePixels(frame.data, 205);
+            bounds = getInkBounds(frame.data, w, h, cropPad, 210);
+          }
+          if (!bounds) {
+            ctx.drawImage(img, 0, 0);
+            const raw = ctx.getImageData(0, 0, w, h);
+            bounds = getInkBounds(raw.data, w, h, cropPad, 215);
+            if (bounds) {
+              applyInkRect(img, bounds, w, h, false);
+              resolve(img);
+              return;
+            }
+            resolve(img);
+            return;
+          }
+
+          ctx.putImageData(frame, 0, 0);
+
+          const out = document.createElement('canvas');
+          out.width = bounds.tw;
+          out.height = bounds.th;
+          out.getContext('2d').drawImage(
+            canvas,
+            bounds.minX, bounds.minY, bounds.tw, bounds.th,
+            0, 0, bounds.tw, bounds.th
+          );
+
+          canvasToImage(out).then((processed) => {
+            const finalImg = processed || img;
+            applyInkRect(finalImg, bounds, w, h, !!processed);
+            resolve(finalImg);
+          });
+        } catch (err) {
+          resolve(img);
+        }
+      });
+    }
+
+    function scheduleNextSpawn() {
+      const minGap = Math.max(0.65, 1.05 - difficulty * 0.045);
+      const maxGap = 4.5;
+      spawnInterval = minGap + Math.random() * (maxGap - minGap);
+    }
+
+    function showGameOverPanel() {
+      finalScoreEl.textContent = '카운트 : ' + cutCount + '개  최대콤보 : ' + maxCombo + '개';
+      gameOverEl.classList.add('show');
+    }
+
+    function hideGameOverPanel() {
+      gameOverEl.classList.remove('show');
+    }
+
+    async function loadRankings() {
+      const tbody = document.getElementById('ranking-body');
+      tbody.innerHTML = '<tr><td colspan="4" class="ranking-loading">불러오는 중...</td></tr>';
+
+      const client = initSupabase();
+      if (!client) {
+        tbody.innerHTML = '<tr><td colspan="4" class="ranking-loading">Supabase 연결 실패 — URL/KEY 확인</td></tr>';
+        return;
+      }
+
+      const { data, error } = await client
+        .from('rankings')
+        .select('nickname, count, combo')
+        .order('combo', { ascending: false })
+        .order('count', { ascending: false })
+        .limit(20);
+
+      if (error || !data) {
+        tbody.innerHTML = '<tr><td colspan="4" class="ranking-loading">불러오기 실패</td></tr>';
+        return;
+      }
+
+      if (data.length === 0) {
+        tbody.innerHTML = '<tr><td colspan="4" class="ranking-loading">아직 기록이 없습니다</td></tr>';
+        return;
+      }
+
+      tbody.innerHTML = data.map((row, i) => {
+        const rankClass = i === 0 ? 'rank-1' : i === 1 ? 'rank-2' : i === 2 ? 'rank-3' : '';
+        const rankLabel = i === 0 ? '🥇' : i === 1 ? '🥈' : i === 2 ? '🥉' : i + 1;
+        return `
+      <tr>
+        <td class="${rankClass}">${rankLabel}</td>
+        <td>${escapeHtml(row.nickname)}</td>
+        <td>${row.count}</td>
+        <td>${row.combo}</td>
+      </tr>
+    `;
+      }).join('');
+    }
+
+    function escapeHtml(str) {
+      return String(str)
+        .replace(/&/g, '&amp;')
+        .replace(/</g, '&lt;')
+        .replace(/>/g, '&gt;')
+        .replace(/"/g, '&quot;');
+    }
+
+    async function submitScore(nickname) {
+      const btn = document.getElementById('btn-submit-score');
+      const client = initSupabase();
+      if (!client) {
+        alert('Supabase 연결 실패. URL/KEY를 확인해주세요.');
+        return;
+      }
+
+      btn.disabled = true;
+      btn.textContent = '등록 중...';
+
+      const { error } = await client
+        .from('rankings')
+        .insert([{
+          nickname: nickname.trim(),
+          count: currentCount,
+          combo: maxCombo
+        }]);
+
+      if (error) {
+        btn.disabled = false;
+        btn.textContent = '등록하기';
+        alert('등록 실패. 다시 시도해주세요.');
+        return;
+      }
+
+      scoreSubmitted = true;
+      btn.textContent = '등록 완료 ✓';
+      await loadRankings();
+    }
+
+    function showRankingScreen() {
+      rankingScreenEl.classList.remove('hidden');
+      mainMenuEl.classList.add('hidden');
+      nicknameInput.disabled = scoreSubmitted;
+      btnSubmitScore.disabled = scoreSubmitted;
+      btnSubmitScore.textContent = scoreSubmitted ? '등록 완료 ✓' : '등록하기';
+      loadRankings();
+    }
+
+    function hideRankingScreen() {
+      rankingScreenEl.classList.add('hidden');
+      if (gameState === GameState.MAIN_MENU) {
+        mainMenuEl.classList.remove('hidden');
+      }
+    }
+
+    function resetGame() {
+      hp = MAX_HP;
+      stamina = MAX_STAMINA;
+      staminaRegenTimer = 0;
+      combo = 0;
+      maxCombo = 0;
+      cutCount = 0;
+      currentCount = 0;
+      scoreSubmitted = false;
+      parryActive = false;
+      parryTimer = 0;
+      screenFlash = 0;
+      spawnTimer = 0;
+      scheduleNextSpawn();
+      difficulty = 1;
+      gameTime = 0;
+      comboPop = 0;
+      gameOver = false;
+      attacks.length = 0;
+      particles.length = 0;
+      brokenSticks.length = 0;
+      slashes.length = 0;
+      charState = 'idle';
+      charTimer = 0;
+      charShakeTimer = 0;
+      charReturnTimer = 0;
+      updateHUD();
+      hideGameOverPanel();
+    }
+
+    function updateHUD() {
+      hpBlocksEl.querySelectorAll('.hud-block').forEach((block, i) => {
+        block.classList.toggle('empty', i >= hp);
+      });
+      staminaBlocksEl.querySelectorAll('.hud-block').forEach((block, i) => {
+        block.classList.toggle('empty', i >= stamina);
+      });
+      staminaWrap.classList.toggle('empty', stamina < STAMINA_SWING_COST);
+      cutCountEl.textContent = String(cutCount);
+    }
+
+    function bumpComboVisual() {
+      comboPop = 1;
+    }
+
+    function getComboPopScale() {
+      if (comboPop <= 0) return 1;
+      const t = 1 - comboPop;
+      return 1 + Math.sin(t * Math.PI) * 0.28;
+    }
+
+    function getComboDigitGap(count, digitH) {
+      if (count <= 1) return 0;
+      return Math.max(8, digitH * COMBO_DIGIT_GAP_RATIO);
+    }
+
+    function setUiFont(ctx, sizePx, weight) {
+      ctx.font = (weight || 400) + ' ' + sizePx + 'px ' + UI_FONT;
+      ctx.fillStyle = '#111';
+      ctx.textBaseline = 'alphabetic';
+    }
+
+    function measureTrackedText(ctx, text, sizePx, trackingPx) {
+      setUiFont(ctx, sizePx);
+      if (!text) return { width: 0, height: sizePx };
+      if (!trackingPx || text.length <= 1) {
+        return { width: ctx.measureText(text).width, height: sizePx };
+      }
+      let width = 0;
+      for (let i = 0; i < text.length; i++) {
+        width += ctx.measureText(text[i]).width;
+        if (i < text.length - 1) width += trackingPx;
+      }
+      return { width, height: sizePx };
+    }
+
+    function measureDigitRow(ctx, digits, sizePx, gap) {
+      setUiFont(ctx, sizePx);
+      if (digits.length <= 1) {
+        return ctx.measureText(digits).width;
+      }
+      let width = 0;
+      for (let i = 0; i < digits.length; i++) {
+        width += ctx.measureText(digits[i]).width;
+        if (i < digits.length - 1) width += gap;
+      }
+      return width;
+    }
+
+    function drawDigitRow(ctx, digits, leftX, baselineY, sizePx, gap) {
+      setUiFont(ctx, sizePx);
+      let x = leftX;
+      for (let i = 0; i < digits.length; i++) {
+        ctx.fillText(digits[i], x, baselineY);
+        x += ctx.measureText(digits[i]).width + (i < digits.length - 1 ? gap : 0);
+      }
+    }
+
+    function drawTrackedText(ctx, text, centerX, baselineY, sizePx, trackingPx) {
+      const metrics = measureTrackedText(ctx, text, sizePx, trackingPx);
+      let x = centerX - metrics.width * 0.5;
+      setUiFont(ctx, sizePx);
+      for (let i = 0; i < text.length; i++) {
+        ctx.fillText(text[i], x, baselineY);
+        x += ctx.measureText(text[i]).width + (i < text.length - 1 ? trackingPx : 0);
+      }
+      return metrics;
+    }
+
+    function drawCombo() {
+      if (combo <= 0) return;
+
+      const digits = String(combo);
+      const pop = getComboPopScale();
+      const anchor = getComboAnchor();
+      const centerX = anchor.x;
+      let digitH = Math.min(W * 0.30, H * 0.32) * COMBO_SIZE_SCALE;
+      if (digits.length >= 2) {
+        digitH *= COMBO_MULTI_SCALE[Math.min(digits.length, 4)] || COMBO_MULTI_SCALE[4];
+      }
+
+      let digitFontSize = digitH * 0.78;
+      let digitGap = getComboDigitGap(digits.length, digitH);
+      let totalDigitW = measureDigitRow(ctx, digits, digitFontSize, digitGap);
+
+      const maxRowW = W * (digits.length >= 3 ? 0.88 : 0.92);
+      if (totalDigitW > maxRowW) {
+        const shrink = maxRowW / totalDigitW;
+        digitFontSize *= shrink;
+        digitH *= shrink;
+        digitGap = getComboDigitGap(digits.length, digitH);
+        totalDigitW = measureDigitRow(ctx, digits, digitFontSize, digitGap);
+      }
+
+      let labelFontSize = Math.max(UI_LABEL_PX, digitH * 0.22);
+      const labelTracking = UI_LABEL_TRACK * (labelFontSize / UI_LABEL_PX);
+      let labelMetrics = measureTrackedText(ctx, 'COMBO', labelFontSize, labelTracking);
+      if (labelMetrics.width < totalDigitW * 0.82) {
+        labelFontSize = labelFontSize * (totalDigitW * 0.82 / labelMetrics.width);
+        labelMetrics = measureTrackedText(ctx, 'COMBO', labelFontSize, UI_LABEL_TRACK * (labelFontSize / UI_LABEL_PX));
+      }
+
+      const stackGap = Math.max(COMBO_STACK_GAP_MIN, digitH * COMBO_STACK_GAP_RATIO);
+      const labelH = labelFontSize * 1.15;
+      const blockH = digitH + stackGap + labelH;
+      const stackBottomY = anchor.stackBottomY;
+      const blockCenterY = stackBottomY - blockH * 0.5;
+      const comboBaseline = stackBottomY - labelFontSize * 0.12;
+      const digitBaseline = stackBottomY - labelH - stackGap - digitFontSize * 0.12;
+
+      ctx.save();
+      ctx.translate(centerX, blockCenterY);
+      ctx.scale(pop, pop);
+      ctx.translate(-centerX, -blockCenterY);
+
+      drawDigitRow(ctx, digits, centerX - totalDigitW * 0.5, digitBaseline, digitFontSize, digitGap);
+      drawTrackedText(ctx, 'COMBO', centerX, comboBaseline, labelFontSize, UI_LABEL_TRACK * (labelFontSize / UI_LABEL_PX));
+      ctx.restore();
+    }
+
+    function loadCharImages() {
+      const map = {
+        idle:     '캐릭터3(준비자세).png',
+        draw:     '캐릭터2(좌측검뺀자세).png',
+        diag_L:   '캐릭터4(좌측상단우측하단).png',
+        diag_R:   '캐릭터5(우측상단좌측하단).png',
+        horiz:    '캐릭터1(올려베기).png',
+        up:       '캐릭터8(위로베기).png',
+        down_pre: '캐릭터6(아래꽂기).png',
+        down:     '캐릭터7(아래베기).png'
+      };
+      let pending = Object.keys(map).length;
+      const onDone = () => { if (--pending <= 0) charImgs.loaded = true; };
+      for (const [key, src] of Object.entries(map)) {
+        const img = new Image();
+        img.onload = () => {
+          processInkImageAsync(img, 210)
+            .then((trimmed) => { charImgs[key] = trimmed; })
+            .catch(() => { charImgs[key] = img; })
+            .finally(onDone);
+        };
+        img.onerror = () => { charImgs[key] = null; onDone(); };
+        img.src = src;
+      }
+    }
+
+    function triggerFlash() {
+      screenFlash = 0.18;
+    }
+
+    function spawnAttack() {
+      const edge = Math.floor(Math.random() * 3);
+      let x, y;
+      const margin = 30;
+
+      if (edge === 0) {
+        x = margin + Math.random() * (W - margin * 2);
+        y = -margin;
+      } else if (edge === 1) {
+        x = -margin;
+        y = margin + Math.random() * (H * 0.55);
+      } else {
+        x = W + margin;
+        y = margin + Math.random() * (H * 0.55);
+      }
+
+      const cc = getCombatCenter();
+      const dx = cc.x - x;
+      const dy = cc.y - y;
+      const dist = Math.hypot(dx, dy);
+      const baseTime = Math.max(0.34, 0.58 - difficulty * 0.015);
+      const travelTime = Math.max(0.34, baseTime * (0.55 + Math.random() * 0.85));
+      const speed = dist / travelTime;
+
+      attacks.push({
+        x, y,
+        vx: (dx / dist) * speed,
+        vy: (dy / dist) * speed,
+        angle: Math.atan2(dy, dx),
+        length: 88,
+        thickness: 8,
+        alive: true,
+        parried: false
+      });
+    }
+
+    function isInParryArc(ax, ay) {
+      const cc = getCombatCenter();
+      const angle = Math.atan2(ay - cc.y, ax - cc.x);
+      return angle >= -Math.PI && angle <= 0;
+    }
+
+    function isInParryZone(ax, ay) {
+      const cc = getCombatCenter();
+      const dist = Math.hypot(ax - cc.x, ay - cc.y);
+      return dist <= PARRY_RADIUS && dist > getBodyHitRadius() && isInParryArc(ax, ay);
+    }
+
+    function canParryAttack(atk, dt) {
+      if (isInParryZone(atk.x, atk.y)) return true;
+
+      const cc = getCombatCenter();
+      const px = atk.x - atk.vx * dt;
+      const py = atk.y - atk.vy * dt;
+      const prevDist = Math.hypot(px - cc.x, py - cc.y);
+      const dist = Math.hypot(atk.x - cc.x, atk.y - cc.y);
+
+      if (prevDist > PARRY_RADIUS && dist <= PARRY_RADIUS && dist > getBodyHitRadius() && isInParryArc(atk.x, atk.y)) {
+        return true;
+      }
+      return false;
+    }
+
+    function spawnSparkParticles(x, y, baseAngle) {
+      const count = 5;
+      for (let i = 0; i < count; i++) {
+        const spread = (Math.random() - 0.5) * Math.PI * 0.8;
+        const a = baseAngle + spread;
+        const speed = 80 + Math.random() * 160;
+        particles.push({
+          x, y,
+          vx: Math.cos(a) * speed,
+          vy: Math.sin(a) * speed,
+          life: 0.25 + Math.random() * 0.25,
+          maxLife: 0,
+          size: 2
+        });
+        particles[particles.length - 1].maxLife = particles[particles.length - 1].life;
+      }
+    }
+
+    function spawnBrokenStick(atk) {
+      const perpX = -Math.sin(atk.angle);
+      const perpY = Math.cos(atk.angle);
+      const fwdX = Math.cos(atk.angle);
+      const fwdY = Math.sin(atk.angle);
+
+      const specs = [
+        { offset: -0.12, len: 0.42, ang: 0.55, px: 140, py: 60, spin: 4.5 },
+        { offset: 0.08, len: 0.48, ang: -0.65, px: -120, py: 80, spin: -5 }
+      ];
+
+      for (const s of specs) {
+        brokenSticks.push({
+          x: atk.x + fwdX * atk.length * s.offset,
+          y: atk.y + fwdY * atk.length * s.offset,
+          angle: atk.angle + s.ang,
+          length: atk.length * s.len,
+          thickness: atk.thickness,
+          vx: atk.vx * 0.12 + perpX * s.px + fwdX * 30,
+          vy: atk.vy * 0.12 + perpY * s.py + fwdY * 30,
+          spin: s.spin,
+          life: 0.22,
+          maxLife: 0.22
+        });
+      }
+    }
+
+    function pickSlashPatternFromSource(vx, vy) {
+      const fromAngle = Math.atan2(-vy, -vx);
+      const deg = ((fromAngle * 180 / Math.PI) + 360) % 360;
+
+      if (deg >= 225 && deg < 315) {
+        return 'down';
+      } else if (deg >= 135 && deg < 225) {
+        return 'diag_L';
+      } else if (deg >= 315 || deg < 45) {
+        return 'diag_R';
+      } else {
+        return 'horiz';
+      }
+    }
+
+    function pickRandomSlashPattern() {
+      const patterns = ['down', 'diag_L', 'diag_R', 'horiz'];
+      return patterns[Math.floor(Math.random() * patterns.length)];
+    }
+
+    function spawnSlash(pattern) {
+      const cfg = SLASH_VISUAL[pattern] || SLASH_VISUAL.horiz;
+      const cc = getCombatCenter();
+      slashes.push({
+        x: cc.x, y: cc.y,
+        angle: cfg.angle,
+        len: PARRY_RADIUS * 0.85,
+        t: 0, dur: 0.14
+      });
+    }
+
+    function perfectParry(attack) {
+      spawnBrokenStick(attack);
+      attack.alive = false;
+      attack.parried = true;
+      cutCount++;
+      currentCount++;
+      combo++;
+      if (combo > maxCombo) maxCombo = combo;
+      bumpComboVisual();
+      triggerFlash();
+      spawnSparkParticles(attack.x, attack.y, attack.angle + Math.PI);
+      stamina = Math.min(MAX_STAMINA, stamina + STAMINA_SWING_COST);
+      updateHUD();
+      difficulty = Math.min(difficulty + 0.025, 5);
+    }
+
+    function takeHit() {
+      combo = 0;
+      comboPop = 0;
+      charState = 'hit';
+      charShakeTimer = 0.32;
+      hp = Math.max(0, hp - HIT_DAMAGE);
+      updateHUD();
+      if (hp <= 0) {
+        gameOver = true;
+        showGameOverPanel();
+      }
+    }
+
+    function tryParry() {
+      if (gameState !== GameState.PLAYING) return;
+      if (gameOver || !running) return;
+      if (stamina < STAMINA_SWING_COST) return;
+
+      stamina -= STAMINA_SWING_COST;
+      updateHUD();
+      parryActive = true;
+      parryTimer = PARRY_WINDOW;
+
+      const nearestAttack = attacks
+        .filter(a => a.alive)
+        .sort((a, b) =>
+          Math.hypot(a.x - player.x, a.y - player.y) -
+          Math.hypot(b.x - player.x, b.y - player.y)
+        )[0];
+
+      const slashPattern = nearestAttack
+        ? pickSlashPatternFromSource(nearestAttack.vx, nearestAttack.vy)
+        : pickRandomSlashPattern();
+
+      charPattern = slashPattern;
+      charState = 'draw';
+      charTimer = 0.06;
+      spawnSlash(slashPattern);
+
+      for (const atk of attacks) {
+        if (!atk.alive) continue;
+        if (isInParryZone(atk.x, atk.y)) {
+          perfectParry(atk);
+        }
+      }
+    }
+
+    function updateAttacks(dt) {
+      for (const atk of attacks) {
+        if (!atk.alive) continue;
+
+        atk.x += atk.vx * dt;
+        atk.y += atk.vy * dt;
+
+        const cc = getCombatCenter();
+        const dist = Math.hypot(atk.x - cc.x, atk.y - cc.y);
+
+        if (parryActive && canParryAttack(atk, dt)) {
+          perfectParry(atk);
+          continue;
+        }
+
+        if (dist <= getBodyHitRadius()) {
+          atk.alive = false;
+          takeHit();
+        }
+      }
+    }
+
+    function updateParticles(dt) {
+      for (let i = particles.length - 1; i >= 0; i--) {
+        const p = particles[i];
+        p.x += p.vx * dt;
+        p.y += p.vy * dt;
+        p.vx *= 0.96;
+        p.vy *= 0.96;
+        p.life -= dt;
+        if (p.life <= 0) particles.splice(i, 1);
+      }
+    }
+
+    function updateBrokenSticks(dt) {
+      for (let i = brokenSticks.length - 1; i >= 0; i--) {
+        const b = brokenSticks[i];
+        b.x += b.vx * dt;
+        b.y += b.vy * dt;
+        b.angle += b.spin * dt;
+        b.vx *= 0.92;
+        b.vy *= 0.92;
+        b.life -= dt;
+        if (b.life <= 0) brokenSticks.splice(i, 1);
+      }
+    }
+
+    function drawBrokenSticks() {
+      for (const b of brokenSticks) {
+        const t = b.life / b.maxLife;
+        ctx.save();
+        ctx.globalAlpha = t;
+        ctx.translate(b.x, b.y);
+        ctx.rotate(b.angle);
+        ctx.strokeStyle = '#111';
+        ctx.lineWidth = b.thickness;
+        ctx.lineCap = 'round';
+        ctx.beginPath();
+        ctx.moveTo(-b.length * 0.5, 0);
+        ctx.lineTo(b.length * 0.5, 0);
+        ctx.stroke();
+        ctx.restore();
+      }
+      ctx.globalAlpha = 1;
+    }
+
+    function updateSlashes(dt) {
+      for (let i = slashes.length - 1; i >= 0; i--) {
+        slashes[i].t += dt;
+        if (slashes[i].t >= slashes[i].dur) slashes.splice(i, 1);
+      }
+    }
+
+    function drawSlashes() {
+      for (const s of slashes) {
+        const p = Math.min(1, s.t / s.dur);
+        const ease = 1 - Math.pow(1 - p, 3);
+        const fade = 1 - p * p;
+        const len = s.len * ease;
+        const cos = Math.cos(s.angle);
+        const sin = Math.sin(s.angle);
+
+        ctx.save();
+        ctx.globalAlpha = fade * 0.7;
+        ctx.strokeStyle = '#111';
+        ctx.lineWidth = 2;
+        ctx.lineCap = 'round';
+        ctx.beginPath();
+        ctx.moveTo(s.x, s.y);
+        ctx.lineTo(s.x + cos * len, s.y + sin * len);
+        ctx.stroke();
+        ctx.restore();
+      }
+      ctx.globalAlpha = 1;
+    }
+
+    function drawParryZone() {
+      if (gameTime >= GUIDE_SHOW_TIME) return;
+
+      const cc = getCombatCenter();
+      ctx.strokeStyle = 'rgba(0, 0, 0, 0.85)';
+      ctx.lineWidth = 1.5;
+      ctx.beginPath();
+      ctx.arc(cc.x, cc.y, PARRY_RADIUS, Math.PI, 0, false);
+      ctx.stroke();
+    }
+
+    function drawBackground() {
+      ctx.fillStyle = '#fff';
+      ctx.fillRect(0, 0, W, H);
+    }
+
+    function drawPlayer() {
+      const rect = getCharDrawRect();
+      const nw = rect.img && (rect.img.naturalWidth || rect.img.width);
+      const nh = rect.img && (rect.img.naturalHeight || rect.img.height);
+      if (rect.img && nw && nh) {
+        const ink = rect.ink || getInkRect(rect.img, null);
+        drawInkImageSrc(rect.img, ink, rect.x, rect.y, rect.w, rect.h);
+      } else {
+        drawPlayerFallbackDot();
+      }
+    }
+
+    function drawAttack(atk) {
+      ctx.save();
+      ctx.translate(atk.x, atk.y);
+      ctx.rotate(atk.angle);
+
+      ctx.strokeStyle = '#111';
+      ctx.lineWidth = atk.thickness * 0.55;
+      ctx.lineCap = 'round';
+      ctx.beginPath();
+      ctx.moveTo(-atk.length * 0.55, 0);
+      ctx.lineTo(atk.length * 0.45, 0);
+      ctx.stroke();
+
+      ctx.lineWidth = atk.thickness;
+      ctx.beginPath();
+      ctx.moveTo(atk.length * 0.18, 0);
+      ctx.lineTo(atk.length * 0.45, 0);
+      ctx.stroke();
+
+      ctx.lineWidth = atk.thickness * 0.7;
+      ctx.beginPath();
+      ctx.moveTo(atk.length * 0.45, 0);
+      ctx.lineTo(atk.length * 0.22, -atk.thickness * 1.4);
+      ctx.moveTo(atk.length * 0.45, 0);
+      ctx.lineTo(atk.length * 0.22,  atk.thickness * 1.4);
+      ctx.stroke();
+
+      ctx.restore();
+    }
+
+    function drawParticles() {
+      ctx.fillStyle = '#111';
+      for (const p of particles) {
+        const t = p.life / p.maxLife;
+        ctx.globalAlpha = t;
+        ctx.beginPath();
+        ctx.arc(p.x, p.y, p.size, 0, Math.PI * 2);
+        ctx.fill();
+      }
+      ctx.globalAlpha = 1;
+    }
+
+    function drawScreenFlash() {
+      if (screenFlash > 0) {
+        ctx.fillStyle = `rgba(0, 0, 0, ${screenFlash * 0.08})`;
+        ctx.fillRect(0, 0, W, H);
+      }
+    }
+
+    function update(dt) {
+      if (gameState !== GameState.PLAYING) return;
+      if (gameOver) return;
+
+      gameTime += dt;
+
+      if (parryTimer > 0) {
+        parryTimer -= dt;
+        if (parryTimer <= 0) parryActive = false;
+      }
+
+      if (screenFlash > 0) screenFlash -= dt;
+
+      if (comboPop > 0) comboPop = Math.max(0, comboPop - dt / COMBO_POP_DURATION);
+
+      if (charTimer > 0) charTimer -= dt;
+
+      if (charState === 'draw' && charTimer <= 0) {
+        charState = 'slash';
+        charTimer = (charPattern === 'down') ? 0.12 : 0.0;
+      }
+      if (charState === 'slash' && charTimer <= 0) {
+        charState = 'impact';
+        charTimer = 0.14;
+      }
+      if (charState === 'impact' && charTimer <= 0) {
+        charState = 'return';
+        charReturnTimer = 0.10;
+      }
+      if (charState === 'return') {
+        charReturnTimer -= dt;
+        if (charReturnTimer <= 0) charState = 'idle';
+      }
+      if (charShakeTimer > 0) charShakeTimer -= dt;
+      if (charState === 'hit' && charShakeTimer <= 0) charState = 'idle';
+
+      if (stamina < MAX_STAMINA) {
+        staminaRegenTimer += dt;
+        while (staminaRegenTimer >= STAMINA_REGEN_INTERVAL) {
+          staminaRegenTimer -= STAMINA_REGEN_INTERVAL;
+          if (stamina < MAX_STAMINA) {
+            stamina = Math.min(MAX_STAMINA, stamina + STAMINA_REGEN_AMOUNT);
+            updateHUD();
+          }
+        }
+      } else {
+        staminaRegenTimer = 0;
+      }
+
+      if (gameTime >= ATTACKS_START_TIME) {
+        spawnTimer += dt;
+        if (spawnTimer >= spawnInterval) {
+          spawnTimer = 0;
+          spawnAttack();
+          scheduleNextSpawn();
+        }
+      }
+
+      updateAttacks(dt);
+      updateParticles(dt);
+      updateBrokenSticks(dt);
+      updateSlashes(dt);
+
+      for (let i = attacks.length - 1; i >= 0; i--) {
+        if (!attacks[i].alive) attacks.splice(i, 1);
+      }
+    }
+
+    function draw() {
+      drawBackground();
+      if (gameState !== GameState.PLAYING) return;
+
+      drawParryZone();
+      drawBrokenSticks();
+      drawPlayer();
+      drawCombo();
+
+      for (const atk of attacks) {
+        if (atk.alive) drawAttack(atk);
+      }
+
+      drawSlashes();
+      drawParticles();
+      drawScreenFlash();
+    }
+
+    function loop(timestamp) {
+      if (!running) return;
+      const dt = Math.min((timestamp - lastTime) / 1000, 0.05);
+      lastTime = timestamp;
+      update(dt);
+      draw();
+      requestAnimationFrame(loop);
+    }
+
+    canvas.addEventListener('mousedown', (e) => {
+      if (e.button !== 0) return;
+      if (gameState !== GameState.PLAYING) return;
+      if (gameOver) return;
+      tryParry();
+    });
+
+    window.addEventListener('keydown', (e) => {
+      if (e.code !== 'Space') return;
+      if (gameState !== GameState.PLAYING) return;
+      if (gameOver) return;
+      e.preventDefault();
+      if (e.repeat) return;
+      tryParry();
+    });
+
+    btnStart.addEventListener('click', (e) => {
+      e.stopPropagation();
+      startGame();
+    });
+
+    btnRetry.addEventListener('click', (e) => {
+      e.stopPropagation();
+      startGame();
+    });
+
+    btnGotoRank.addEventListener('click', (e) => {
+      e.stopPropagation();
+      showRankingScreen();
+    });
+
+    btnRankingBack.addEventListener('click', () => {
+      hideRankingScreen();
+    });
+
+    btnSubmitScore.addEventListener('click', () => {
+      const nickname = nicknameInput.value.trim();
+      if (!nickname) {
+        nicknameInput.focus();
+        return;
+      }
+      if (scoreSubmitted) return;
+      submitScore(nickname);
+    });
+
+    btnRank.addEventListener('click', (e) => {
+      e.stopPropagation();
+      showRankingScreen();
+    });
+
+    gameOverEl.addEventListener('click', (e) => {
+      if (e.target === gameOverEl) e.stopPropagation();
+    });
+
+    window.addEventListener('resize', resize);
+    loadCharImages();
+    setGameState(GameState.MAIN_MENU);
+    resize();
+    running = true;
+    lastTime = performance.now();
+    requestAnimationFrame(loop);
+  })();
+  </script>
+</body>
+</html>
