@@ -684,11 +684,10 @@
     function getCharDrawRect() {
       const img = getCurrentCharImg();
       const h = getCharHeight();
-      const srcW = img && (img.naturalWidth || img.width);
-      const srcH = img && (img.naturalHeight || img.height);
-      const w = srcW && srcH ? (srcW / srcH) * h : h * 0.55;
+      const ink = getInkRect(img, null);
+      const w = (ink.sw / ink.sh) * h;
       const c = getCombatCenter();
-      return { x: c.x - w * 0.5, y: player.y - h, w, h, img };
+      return { x: c.x - w * 0.5, y: player.y - h, w, h, img, ink };
     }
 
     function resize() {
@@ -831,10 +830,7 @@
 
     function drawInkImageSrc(img, ink, dx, dy, dw, dh) {
       if (!img || !ink) return;
-      ctx.save();
-      ctx.globalCompositeOperation = 'multiply';
       ctx.drawImage(img, ink.sx, ink.sy, ink.sw, ink.sh, dx, dy, dw, dh);
-      ctx.restore();
     }
 
     function drawInkImage(img, x, y, w, h) {
@@ -1201,8 +1197,10 @@
       for (const [key, src] of Object.entries(map)) {
         const img = new Image();
         img.onload = () => {
-          charImgs[key] = img;
-          onDone();
+          processInkImageAsync(img, 210)
+            .then((trimmed) => { charImgs[key] = trimmed; })
+            .catch(() => { charImgs[key] = img; })
+            .finally(onDone);
         };
         img.onerror = () => { charImgs[key] = null; onDone(); };
         img.src = src;
@@ -1532,7 +1530,8 @@
       const nw = rect.img && (rect.img.naturalWidth || rect.img.width);
       const nh = rect.img && (rect.img.naturalHeight || rect.img.height);
       if (rect.img && nw && nh) {
-        ctx.drawImage(rect.img, rect.x, rect.y, rect.w, rect.h);
+        const ink = rect.ink || getInkRect(rect.img, null);
+        drawInkImageSrc(rect.img, ink, rect.x, rect.y, rect.w, rect.h);
       } else {
         drawPlayerFallbackDot();
       }
