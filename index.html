@@ -605,8 +605,12 @@
 
     const player = { x: 0, y: 0 };
 
+    const COMBAT_CENTER_Y_RATIO = 0.38;
+
     function getCharHeight() {
-      return Math.min(H * 0.38, 320);
+      // 머리 꼭대기 ≈ 패링 아크 상단(PARRY_RADIUS) — 작았던(168)~큰(320) 중간 ≈ 210
+      const hitboxH = Math.round(PARRY_RADIUS / (1 - COMBAT_CENTER_Y_RATIO));
+      return Math.min(hitboxH, H * 0.32);
     }
 
     function getBodyHitRadius() {
@@ -634,7 +638,7 @@
       const shakeX = charShakeTimer > 0 ? Math.sin(charShakeTimer * 38) * 5 : 0;
       return {
         x: player.x + shakeX,
-        y: player.y - h * 0.38,
+        y: player.y - h * COMBAT_CENTER_Y_RATIO,
         shakeX
       };
     }
