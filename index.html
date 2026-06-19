@@ -606,7 +606,7 @@
     const player = { x: 0, y: 0 };
 
     function getCharHeight() {
-      return Math.min(PARRY_RADIUS * 1.12, H * 0.28, 240);
+      return Math.min(H * 0.38, 320);
     }
 
     function getBodyHitRadius() {
@@ -617,11 +617,10 @@
     function getComboAnchor() {
       const cc = getCombatCenter();
       const rect = getCharDrawRect();
-      const headTopY = cc.y - rect.h * 0.58;
       const clearance = Math.max(COMBO_HEAD_CLEARANCE_MIN, rect.h * COMBO_HEAD_CLEARANCE_RATIO);
       return {
         x: cc.x,
-        stackBottomY: headTopY - clearance
+        stackBottomY: rect.y - clearance
       };
     }
 
@@ -685,11 +684,10 @@
     function getCharDrawRect() {
       const img = getCurrentCharImg();
       const h = getCharHeight();
-      const srcW = img && (img.naturalWidth || img.width);
-      const srcH = img && (img.naturalHeight || img.height);
-      const w = srcW && srcH ? (srcW / srcH) * h : h * 0.55;
+      const ink = getInkRect(img, null);
+      const w = (ink.sw / ink.sh) * h;
       const c = getCombatCenter();
-      return { x: c.x - w * 0.5, y: player.y - h, w, h, img };
+      return { x: c.x - w * 0.5, y: player.y - h, w, h, img, ink };
     }
 
     function resize() {
@@ -1137,14 +1135,12 @@
 
       const digits = String(combo);
       const pop = getComboPopScale();
-      const charRect = getCharDrawRect();
       const anchor = getComboAnchor();
       const centerX = anchor.x;
-      let digitH = charRect.h * 0.58 * COMBO_SIZE_SCALE;
+      let digitH = Math.min(W * 0.30, H * 0.32) * COMBO_SIZE_SCALE;
       if (digits.length >= 2) {
         digitH *= COMBO_MULTI_SCALE[Math.min(digits.length, 4)] || COMBO_MULTI_SCALE[4];
       }
-      digitH = Math.min(digitH, H * 0.14);
 
       let digitFontSize = digitH * 0.78;
       let digitGap = getComboDigitGap(digits.length, digitH);
@@ -1201,8 +1197,10 @@
       for (const [key, src] of Object.entries(map)) {
         const img = new Image();
         img.onload = () => {
-          charImgs[key] = img;
-          onDone();
+          processInkImageAsync(img, 210)
+            .then((trimmed) => { charImgs[key] = trimmed; })
+            .catch(() => { charImgs[key] = img; })
+            .finally(onDone);
         };
         img.onerror = () => { charImgs[key] = null; onDone(); };
         img.src = src;
@@ -1532,7 +1530,8 @@
       const nw = rect.img && (rect.img.naturalWidth || rect.img.width);
       const nh = rect.img && (rect.img.naturalHeight || rect.img.height);
       if (rect.img && nw && nh) {
-        ctx.drawImage(rect.img, rect.x, rect.y, rect.w, rect.h);
+        const ink = rect.ink || getInkRect(rect.img, null);
+        drawInkImageSrc(rect.img, ink, rect.x, rect.y, rect.w, rect.h);
       } else {
         drawPlayerFallbackDot();
       }
