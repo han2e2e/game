@@ -1,0 +1,12 @@
+{
+  "name": "hwasalbegi",
+  "private": true,
+  "description": "화살베기 — HTML5 패리 게임",
+  "scripts": {
+    "deploy": "vercel deploy --prod --yes",
+    "deploy:preview": "vercel deploy --yes"
+  },
+  "devDependencies": {
+    "pngjs": "^7.0.0"
+  }
+}

@@ -2,8 +2,25 @@
 <html lang="ko">
 <head>
   <meta charset="UTF-8">
-  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no, viewport-fit=cover">
   <title>화살베기</title>
+  <meta name="description" content="날아오는 화살을 타이밍에 맞게 클릭/스페이스바로 눌러서 베는 게임입니다.">
+  <link rel="icon" type="image/png" sizes="32x32" href="/favicon-32.png">
+  <link rel="icon" type="image/png" sizes="64x64" href="/favicon.png">
+  <link rel="apple-touch-icon" sizes="180x180" href="/apple-touch-icon.png">
+  <meta property="og:type" content="website">
+  <meta property="og:site_name" content="화살베기">
+  <meta property="og:title" content="화살베기">
+  <meta property="og:description" content="날아오는 화살을 타이밍에 맞게 클릭/스페이스바로 눌러서 베는 게임입니다.">
+  <meta property="og:url" content="https://game-self-two-94.vercel.app/">
+  <meta property="og:image" content="https://game-self-two-94.vercel.app/og-preview.png">
+  <meta property="og:image:alt" content="화살베기">
+  <meta property="og:locale" content="ko_KR">
+  <meta name="twitter:card" content="summary_large_image">
+  <meta name="twitter:title" content="화살베기">
+  <meta name="twitter:description" content="날아오는 화살을 타이밍에 맞게 클릭/스페이스바로 눌러서 베는 게임입니다.">
+  <meta name="twitter:image" content="https://game-self-two-94.vercel.app/og-preview.png">
+  <meta name="twitter:image:alt" content="화살베기">
   <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
   <style>
     * { margin: 0; padding: 0; box-sizing: border-box; }
@@ -12,18 +29,48 @@
       overflow: hidden;
       font-family: 'Segoe UI', 'Malgun Gothic', sans-serif;
       user-select: none;
+      touch-action: manipulation;
+      -webkit-tap-highlight-color: transparent;
     }
     #game-wrap {
       position: relative;
       width: 100vw;
       height: 100vh;
+      height: 100dvh;
       display: flex;
       align-items: center;
       justify-content: center;
+      background: #fff;
+    }
+    #game-stage {
+      position: relative;
+      overflow: hidden;
+      touch-action: manipulation;
+    }
+    #rotate-overlay {
+      position: fixed;
+      inset: 0;
+      z-index: 200;
+      background: #fff;
+      display: none;
+      flex-direction: column;
+      align-items: center;
+      justify-content: center;
+      gap: 16px;
+      padding: 24px;
+      text-align: center;
+    }
+    #rotate-overlay.show { display: flex; }
+    #rotate-overlay p {
+      color: #111;
+      font-size: clamp(18px, 4vw, 24px);
+      letter-spacing: 4px;
+      line-height: 1.6;
     }
     canvas {
       display: block;
       cursor: default;
+      touch-action: manipulation;
     }
     #ui-overlay.hidden {
       display: none;
@@ -124,67 +171,83 @@
     #game-over {
       position: absolute;
       inset: 0;
-      background: rgba(255, 255, 255, 0.92);
+      background: #fff;
       display: none;
       flex-direction: column;
       align-items: center;
       justify-content: center;
       pointer-events: all;
       z-index: 20;
+      font-family: 'Segoe UI', 'Malgun Gothic', sans-serif;
     }
     #game-over.show { display: flex; }
     .game-over-panel {
       display: flex;
       flex-direction: column;
       align-items: center;
-      gap: 18px;
-      width: min(420px, 88vw);
-      padding: 0 16px;
+      justify-content: center;
+      gap: clamp(14px, 2.2vh, 22px);
+      width: min(960px, 96vw);
+      padding: 0 20px;
+      text-align: center;
     }
     #game-over h2 {
       color: #111;
-      font-size: clamp(28px, 6vw, 40px);
-      letter-spacing: 8px;
+      font-size: clamp(48px, 10vw, 72px);
+      font-weight: 400;
+      letter-spacing: clamp(6px, 1.2vw, 12px);
+      line-height: 1;
       margin: 0;
+      white-space: nowrap;
     }
     #game-over .final-score {
       color: #111;
-      font-size: 11px;
-      letter-spacing: 4px;
+      font-size: clamp(26px, min(5vw, 4.2vh), 44px);
+      font-weight: 400;
+      letter-spacing: clamp(3px, 0.8vw, 6px);
+      line-height: 1;
       margin: 0;
-      opacity: 0.55;
+      opacity: 0.82;
+      white-space: nowrap;
     }
     .game-over-actions {
       display: flex;
       flex-direction: column;
       align-items: center;
-      gap: min(2vh, 18px);
-      width: min(52vw, 480px);
-      margin-top: min(3vh, 28px);
+      justify-content: center;
+      gap: clamp(16px, 2.5vh, 28px);
+      width: auto;
+      margin-top: clamp(6px, 1vh, 12px);
     }
+    #btn-retry { order: 1; }
+    #btn-goto-rank { order: 2; }
+    #btn-home { order: 3; }
     #game-over .game-over-btn {
-      width: 100%;
-      height: min(9vh, 76px);
+      width: auto;
+      min-height: 0;
       border: none;
       background: transparent;
       color: #111;
       font-family: inherit;
-      font-size: 11px;
+      font-size: clamp(26px, min(5vw, 4.2vh), 44px);
       font-weight: 400;
-      letter-spacing: 4px;
+      letter-spacing: clamp(3px, 0.8vw, 6px);
       cursor: pointer;
-      padding: 0;
+      padding: 6px 2px;
       display: flex;
       align-items: center;
       justify-content: center;
-      opacity: 0.45;
-      transition: opacity 0.2s ease;
+      opacity: 0.42;
+      white-space: nowrap;
+      flex: 0 0 auto;
+      transition: opacity 0.22s ease, letter-spacing 0.22s ease;
     }
     #game-over .game-over-btn:hover {
       opacity: 1;
+      letter-spacing: clamp(5px, 1vw, 8px);
     }
     #game-over .game-over-btn:active {
-      opacity: 0.3;
+      opacity: 0.28;
     }
     #main-menu {
       position: absolute;
@@ -196,6 +259,7 @@
       justify-content: center;
       z-index: 15;
       pointer-events: auto;
+      font-family: 'Segoe UI', 'Malgun Gothic', sans-serif;
     }
     #main-menu.hidden {
       display: none;
@@ -229,32 +293,34 @@
       display: flex;
       flex-direction: column;
       align-items: center;
-      gap: min(2vh, 18px);
-      width: min(52vw, 480px);
+      gap: clamp(16px, 2.5vh, 28px);
+      width: auto;
     }
     #main-menu .menu-btn {
-      width: 100%;
-      height: min(9vh, 76px);
+      width: auto;
+      min-height: 0;
       border: none;
       background: transparent;
       color: #111;
       font-family: inherit;
-      font-size: 11px;
+      font-size: clamp(26px, min(5vw, 4.2vh), 44px);
       font-weight: 400;
-      letter-spacing: 4px;
+      letter-spacing: clamp(3px, 0.8vw, 6px);
       cursor: pointer;
-      padding: 0;
+      padding: 6px 2px;
       display: flex;
       align-items: center;
       justify-content: center;
-      opacity: 0.45;
-      transition: opacity 0.2s ease;
+      opacity: 0.42;
+      white-space: nowrap;
+      transition: opacity 0.22s ease, letter-spacing 0.22s ease;
     }
     #main-menu .menu-btn:hover {
       opacity: 1;
+      letter-spacing: clamp(5px, 1vw, 8px);
     }
     #main-menu .menu-btn:active {
-      opacity: 0.3;
+      opacity: 0.28;
     }
     #ranking-screen {
       position: absolute;
@@ -298,13 +364,18 @@
 
     .ranking-table th,
     .ranking-table td {
-      padding: 10px 14px;
+      padding: 7px 10px;
       text-align: center;
       border-bottom: 1px solid #e0e0e0;
+    }
+
+    .ranking-table tbody td,
+    .ranking-table tfoot td {
       color: #111;
     }
 
     .ranking-table th {
+      color: #111;
       font-weight: 600;
       letter-spacing: 3px;
       font-size: clamp(10px, 1.8vw, 12px);
@@ -312,7 +383,34 @@
     }
 
     .ranking-table tbody tr:last-child td { border-bottom: none; }
-    .ranking-table tbody tr:nth-child(1) td { font-weight: 700; }
+
+    .ranking-pagination {
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      gap: clamp(8px, 2vw, 14px);
+      width: 100%;
+      margin-top: 14px;
+    }
+    .ranking-page-btn {
+      border: none;
+      background: transparent;
+      color: #111;
+      font-family: inherit;
+      font-size: clamp(12px, 2vw, 14px);
+      letter-spacing: 2px;
+      padding: 4px 8px;
+      cursor: pointer;
+      opacity: 0.38;
+      transition: opacity 0.2s ease;
+    }
+    .ranking-page-btn:hover { opacity: 0.85; }
+    .ranking-page-btn.is-active {
+      opacity: 1;
+      font-weight: 700;
+      text-decoration: underline;
+      text-underline-offset: 4px;
+    }
 
     .ranking-loading {
       color: #aaa;
@@ -321,39 +419,81 @@
       font-size: 12px;
     }
 
-    .rank-1 { color: #b8860b; font-weight: 700; }
-    .rank-2 { color: #666; font-weight: 600; }
-    .rank-3 { color: #a0522d; font-weight: 600; }
+    .rank-cell {
+      font-weight: 700;
+      font-variant-numeric: tabular-nums;
+      font-size: clamp(13px, 2.4vw, 16px);
+    }
+    .ranking-table td.rank-1 {
+      color: #c9a227;
+      font-weight: 900;
+      font-size: clamp(15px, 2.8vw, 19px);
+    }
+    .ranking-table td.rank-2 {
+      color: #7a8088;
+      font-weight: 900;
+      font-size: clamp(14px, 2.6vw, 18px);
+    }
+    .ranking-table td.rank-3 {
+      color: #b87333;
+      font-weight: 900;
+      font-size: clamp(14px, 2.6vw, 18px);
+    }
+    .ranking-table td.rank-num {
+      color: #111;
+      font-weight: 800;
+    }
 
-    .ranking-submit {
-      display: flex;
-      gap: 10px;
-      width: 100%;
+    .ranking-table tfoot td {
+      border-top: 1px solid #111;
+      background: #fafafa;
+      font-weight: 600;
+    }
+    .ranking-table tfoot tr.ranking-submit-row td {
+      vertical-align: middle;
+    }
+    .ranking-table .ranking-action-col {
+      width: 96px;
+    }
+    .ranking-submit-nick {
+      padding: 6px 10px;
     }
 
     #nickname-input {
-      flex: 1;
+      width: 100%;
       border: 1px solid #111;
       background: #fff;
       color: #111;
-      font-size: 14px;
-      letter-spacing: 2px;
-      padding: 10px 14px;
+      font-size: clamp(12px, 2.2vw, 15px);
+      letter-spacing: 1px;
+      padding: 8px 10px;
       outline: none;
       font-family: inherit;
+      font-weight: 400;
+      text-align: center;
+      box-sizing: border-box;
     }
     #nickname-input:focus { border-color: #555; }
+    #nickname-input:disabled {
+      background: transparent;
+      border-color: transparent;
+      color: #111;
+      font-weight: 600;
+    }
 
     #btn-submit-score {
+      width: 100%;
       border: 1px solid #111;
       background: #111;
       color: #fff;
-      font-size: 13px;
-      letter-spacing: 3px;
-      padding: 10px 20px;
+      font-size: clamp(10px, 1.8vw, 12px);
+      letter-spacing: 2px;
+      padding: 8px 10px;
       cursor: pointer;
       font-family: inherit;
+      font-weight: 400;
       transition: opacity 0.15s;
+      white-space: nowrap;
     }
     #btn-submit-score:hover { opacity: 0.75; }
     #btn-submit-score:disabled {
@@ -377,6 +517,10 @@
 </head>
 <body>
   <div id="game-wrap">
+    <div id="rotate-overlay">
+      <p>화살 베기는 가로 모드에 최적화되어 있습니다.<br>기기를 가로로 돌려주세요.</p>
+    </div>
+    <div id="game-stage">
     <canvas id="game"></canvas>
     <div id="flash-overlay"></div>
     <div id="ui-overlay" class="hidden">
@@ -405,15 +549,16 @@
           </div>
         </div>
       </div>
-      <div class="hud-bottom">LEFT CLICK / SPACE — PARRY</div>
+      <div class="hud-bottom" id="hud-parry-hint">LEFT CLICK / SPACE — PARRY</div>
     </div>
     <div id="game-over">
       <div class="game-over-panel">
-        <h2>GAME OVER</h2>
-        <p class="final-score" id="final-score">카운트 : 0개  최대콤보 : 0개</p>
-        <button id="btn-goto-rank" type="button" class="ranking-back-btn">랭킹 보기</button>
+        <h2>GAME&nbsp;OVER</h2>
+        <p class="final-score" id="final-score">카운트 : 0개&nbsp;&nbsp;최대콤보 : 0개</p>
         <div class="game-over-actions">
           <button class="game-over-btn" id="btn-retry" type="button">다시하기</button>
+          <button class="game-over-btn" id="btn-goto-rank" type="button">랭킹 보기</button>
+          <button class="game-over-btn" id="btn-home" type="button">처음으로</button>
         </div>
       </div>
     </div>
@@ -440,27 +585,39 @@
                 <th>닉네임</th>
                 <th>카운트</th>
                 <th>콤보</th>
+                <th class="ranking-action-col">등록</th>
               </tr>
             </thead>
             <tbody id="ranking-body">
-              <tr><td colspan="4" class="ranking-loading">불러오는 중...</td></tr>
+              <tr><td colspan="5" class="ranking-loading">불러오는 중...</td></tr>
             </tbody>
+            <tfoot id="ranking-submit-foot">
+              <tr class="ranking-submit-row">
+                <td id="my-rank-cell">-</td>
+                <td class="ranking-submit-nick">
+                  <input
+                    id="nickname-input"
+                    type="text"
+                    placeholder="닉네임"
+                    maxlength="12"
+                    autocomplete="off"
+                  />
+                </td>
+                <td id="my-count-cell">0</td>
+                <td id="my-combo-cell">0</td>
+                <td class="ranking-submit-action">
+                  <button id="btn-submit-score" type="button">등록하기</button>
+                </td>
+              </tr>
+            </tfoot>
           </table>
         </div>
 
-        <div class="ranking-submit">
-          <input
-            id="nickname-input"
-            type="text"
-            placeholder="닉네임"
-            maxlength="12"
-            autocomplete="off"
-          />
-          <button id="btn-submit-score" type="button">등록하기</button>
-        </div>
+        <div id="ranking-pagination" class="ranking-pagination"></div>
 
         <button id="btn-ranking-back" type="button" class="ranking-back-btn">← 뒤로</button>
       </div>
+    </div>
     </div>
   </div>
 
@@ -508,9 +665,17 @@
 
     let scoreSubmitted = false;
     let currentCount = 0;
+    let myRankingRecord = null;
+    const RANKING_PAGE_SIZE = 10;
+    const RANKING_MAX = 50;
+    let rankingPage = 1;
+    let rankingDataCache = [];
 
     const canvas = document.getElementById('game');
     const ctx = canvas.getContext('2d');
+    const gameStageEl = document.getElementById('game-stage');
+    const rotateOverlayEl = document.getElementById('rotate-overlay');
+    const hudParryHintEl = document.getElementById('hud-parry-hint');
     const hpBlocksEl = document.getElementById('hp-blocks');
     const staminaBlocksEl = document.getElementById('stamina-blocks');
     const staminaWrap = document.getElementById('stamina-wrap');
@@ -520,6 +685,7 @@
     const finalScoreEl = document.getElementById('final-score');
     const btnRetry = document.getElementById('btn-retry');
     const btnGotoRank = document.getElementById('btn-goto-rank');
+    const btnHome = document.getElementById('btn-home');
     const mainMenuEl = document.getElementById('main-menu');
     const uiOverlayEl = document.getElementById('ui-overlay');
     const btnStart = document.getElementById('btn-start');
@@ -528,6 +694,7 @@
     const nicknameInput = document.getElementById('nickname-input');
     const btnSubmitScore = document.getElementById('btn-submit-score');
     const btnRankingBack = document.getElementById('btn-ranking-back');
+    const rankingPaginationEl = document.getElementById('ranking-pagination');
 
     const GameState = {
       MAIN_MENU: 'MAIN_MENU',
@@ -535,8 +702,18 @@
     };
 
     const PARRY_RADIUS = 130;
-    const PLAYER_HIT_RADIUS = 14;
+    const REF_W = 1600;
+    const REF_H = 900;
+    const PLAYER_FOOT_OFFSET = 90;
     const PARRY_WINDOW = 0.14;
+    const PARRY_WINDOW_MOBILE = 0.18;
+    const DIFFICULTY_MAX = 5;
+    const ARROW_TRAVEL_MIN = 0.42;
+    const ARROW_TRAVEL_MAX = 0.68;
+    const ARROW_TRAVEL_FAST_MAX = 0.48;
+    const COUNT_FAST_THRESHOLD = 40;
+    const COMBO_SOFT_CAP = 40;
+    const PLAYER_HIT_RADIUS = 14;
     const GUIDE_SHOW_TIME = 3;
     const ATTACKS_START_TIME = GUIDE_SHOW_TIME;
     const MAX_HP = 2;
@@ -547,6 +724,7 @@
     const STAMINA_SWING_COST = 1;
 
     let W, H, cx, cy;
+    let gameScale = 1;
     let gameState = GameState.MAIN_MENU;
     let running = false;
     let gameOver = false;
@@ -587,8 +765,8 @@
     const COMBO_STACK_GAP_RATIO = 0.075;
     const COMBO_POP_DURATION = 0.38;
     const COMBO_SIZE_SCALE = 0.7;
-    const COMBO_HEAD_CLEARANCE_RATIO = 0.28;
-    const COMBO_HEAD_CLEARANCE_MIN = 56;
+    const COMBO_SCREEN_CENTER_Y_RATIO = 0.34;
+    const COMBO_COLOR = '#111';
     const INK_PAD_RATIO = 0.018;
 
     const attacks = [];
@@ -607,9 +785,17 @@
 
     const COMBAT_CENTER_Y_RATIO = 0.38;
 
+    function s(value) {
+      return value * gameScale;
+    }
+
+    function getParryRadius() {
+      return s(PARRY_RADIUS);
+    }
+
     function getCharHeight() {
-      const hitboxH = Math.round(PARRY_RADIUS / (1 - COMBAT_CENTER_Y_RATIO) * 0.88);
-      return Math.min(hitboxH, H * 0.30);
+      const hitboxH = Math.round(getParryRadius() / (1 - COMBAT_CENTER_Y_RATIO));
+      return Math.min(Math.round(hitboxH * 1.28), H * 0.38);
     }
 
     function getCharHeadTopY(rect) {
@@ -653,18 +839,13 @@
     }
 
     function getBodyHitRadius() {
-      // 표시 크기와 별도 — 가슴~머리 중심만 맞는 작은 원
-      return PLAYER_HIT_RADIUS;
+      return s(PLAYER_HIT_RADIUS);
     }
 
     function getComboAnchor() {
-      const cc = getCombatCenter();
-      const rect = getCharDrawRect();
-      const headTopY = getCharHeadTopY(rect);
-      const clearance = Math.max(COMBO_HEAD_CLEARANCE_MIN, rect.h * COMBO_HEAD_CLEARANCE_RATIO);
       return {
-        x: cc.x,
-        stackBottomY: headTopY - clearance
+        x: W * 0.5,
+        stackCenterY: H * COMBO_SCREEN_CENTER_Y_RATIO
       };
     }
 
@@ -675,7 +856,7 @@
 
     function getCombatCenter() {
       const h = getCharHeight();
-      const shakeX = charShakeTimer > 0 ? Math.sin(charShakeTimer * 38) * 5 : 0;
+      const shakeX = charShakeTimer > 0 ? Math.sin(charShakeTimer * 38) * s(5) : 0;
       return {
         x: player.x + shakeX,
         y: player.y - h * COMBAT_CENTER_Y_RATIO,
@@ -735,11 +916,73 @@
       return { x: c.x - w * 0.5, y: player.y - h, w, h, img };
     }
 
+    function isCoarseMobile() {
+      return window.matchMedia('(pointer: coarse)').matches
+        || /Android|iPhone|iPad|iPod|Mobile/i.test(navigator.userAgent);
+    }
+
+    function isPortraitViewport() {
+      const { w, h } = getViewportSize();
+      return h > w;
+    }
+
+    function getParryWindow() {
+      return isCoarseMobile() ? PARRY_WINDOW_MOBILE : PARRY_WINDOW;
+    }
+
+    function updateParryHint() {
+      if (!hudParryHintEl) return;
+      hudParryHintEl.textContent = isCoarseMobile()
+        ? 'TAP — PARRY'
+        : 'LEFT CLICK / SPACE — PARRY';
+    }
+
+    function updateOrientationOverlay() {
+      if (!rotateOverlayEl) return;
+      rotateOverlayEl.classList.toggle('show', isCoarseMobile() && isPortraitViewport());
+    }
+
+    function tryLockLandscape() {
+      if (!isCoarseMobile()) return;
+      const orientation = screen.orientation;
+      if (orientation && orientation.lock) {
+        orientation.lock('landscape').catch(function () {});
+      }
+    }
+
+    function getViewportSize() {
+      const vv = window.visualViewport;
+      return {
+        w: Math.round(vv ? vv.width : window.innerWidth),
+        h: Math.round(vv ? vv.height : window.innerHeight)
+      };
+    }
+
     function resize() {
-      W = canvas.width = window.innerWidth;
-      H = canvas.height = window.innerHeight;
+      updateOrientationOverlay();
+      updateParryHint();
+
+      const { w: vw, h: vh } = getViewportSize();
+      const scale = Math.min(vw / REF_W, vh / REF_H);
+      const displayW = Math.max(1, Math.round(REF_W * scale));
+      const displayH = Math.max(1, Math.round(REF_H * scale));
+
+      W = REF_W;
+      H = REF_H;
+      gameScale = 1;
+
+      canvas.width = REF_W;
+      canvas.height = REF_H;
+      canvas.style.width = displayW + 'px';
+      canvas.style.height = displayH + 'px';
+
+      if (gameStageEl) {
+        gameStageEl.style.width = displayW + 'px';
+        gameStageEl.style.height = displayH + 'px';
+      }
+
       cx = W / 2;
-      cy = H - 90;
+      cy = H - s(PLAYER_FOOT_OFFSET);
       player.x = cx;
       player.y = cy;
     }
@@ -752,6 +995,7 @@
     }
 
     function startGame() {
+      tryLockLandscape();
       setGameState(GameState.PLAYING);
       resetGame();
       lastTime = performance.now();
@@ -955,14 +1199,26 @@
       });
     }
 
+    function getEffectiveDifficulty() {
+      return Math.min(difficulty, DIFFICULTY_MAX);
+    }
+
+    function getComboDiffBonus() {
+      if (combo >= COMBO_SOFT_CAP) return 0.015;
+      if (combo >= 10) return 0.05;
+      if (combo >= 5) return 0.035;
+      return 0.025;
+    }
+
     function scheduleNextSpawn() {
-      const minGap = Math.max(0.65, 1.05 - difficulty * 0.045);
+      const d = getEffectiveDifficulty();
+      const minGap = Math.max(0.65, 1.05 - d * 0.045);
       const maxGap = 4.5;
       spawnInterval = minGap + Math.random() * (maxGap - minGap);
     }
 
     function showGameOverPanel() {
-      finalScoreEl.textContent = '카운트 : ' + cutCount + '개  최대콤보 : ' + maxCombo + '개';
+      finalScoreEl.textContent = '카운트 : ' + cutCount + '개\u00A0\u00A0최대콤보 : ' + maxCombo + '개';
       gameOverEl.classList.add('show');
     }
 
@@ -970,45 +1226,164 @@
       gameOverEl.classList.remove('show');
     }
 
-    async function loadRankings() {
-      const tbody = document.getElementById('ranking-body');
-      tbody.innerHTML = '<tr><td colspan="4" class="ranking-loading">불러오는 중...</td></tr>';
+    function getRankLabel(rank) {
+      if (rank === 1) return { rankClass: 'rank-cell rank-1', rankLabel: '1' };
+      if (rank === 2) return { rankClass: 'rank-cell rank-2', rankLabel: '2' };
+      if (rank === 3) return { rankClass: 'rank-cell rank-3', rankLabel: '3' };
+      return { rankClass: 'rank-cell rank-num', rankLabel: String(rank) };
+    }
 
-      const client = initSupabase();
-      if (!client) {
-        tbody.innerHTML = '<tr><td colspan="4" class="ranking-loading">Supabase 연결 실패 — URL/KEY 확인</td></tr>';
+    function applyRankCellStyle(cell, rank) {
+      if (rank === '-' || rank == null || rank === '') {
+        cell.className = 'rank-cell rank-num';
+        cell.textContent = '-';
         return;
       }
-
-      const { data, error } = await client
-        .from('rankings')
-        .select('nickname, count, combo')
-        .order('combo', { ascending: false })
-        .order('count', { ascending: false })
-        .limit(20);
-
-      if (error || !data) {
-        tbody.innerHTML = '<tr><td colspan="4" class="ranking-loading">불러오기 실패</td></tr>';
+      const num = Number(rank);
+      if (!Number.isFinite(num) || num < 1) {
+        cell.className = 'rank-cell rank-num';
+        cell.textContent = String(rank);
         return;
       }
+      const { rankClass, rankLabel } = getRankLabel(num);
+      cell.className = rankClass;
+      cell.textContent = rankLabel;
+    }
 
-      if (data.length === 0) {
-        tbody.innerHTML = '<tr><td colspan="4" class="ranking-loading">아직 기록이 없습니다</td></tr>';
-        return;
-      }
-
-      tbody.innerHTML = data.map((row, i) => {
-        const rankClass = i === 0 ? 'rank-1' : i === 1 ? 'rank-2' : i === 2 ? 'rank-3' : '';
-        const rankLabel = i === 0 ? '🥇' : i === 1 ? '🥈' : i === 2 ? '🥉' : i + 1;
-        return `
+    function renderRankingRow(row, rank) {
+      const { rankClass, rankLabel } = getRankLabel(rank);
+      return `
       <tr>
         <td class="${rankClass}">${rankLabel}</td>
         <td>${escapeHtml(row.nickname)}</td>
         <td>${row.count}</td>
         <td>${row.combo}</td>
-      </tr>
-    `;
+        <td class="ranking-action-empty"></td>
+      </tr>`;
+    }
+
+    async function getProjectedRank(client, count, combo) {
+      const { count: ahead, error } = await client
+        .from('rankings')
+        .select('*', { count: 'exact', head: true })
+        .or([
+          `count.gt.${count}`,
+          `and(count.eq.${count},combo.gt.${combo})`
+        ].join(','));
+
+      if (error) return null;
+      return (ahead ?? 0) + 1;
+    }
+
+    async function getRankForRecord(client, record) {
+      const { count, error } = await client
+        .from('rankings')
+        .select('*', { count: 'exact', head: true })
+        .or([
+          `count.gt.${record.count}`,
+          `and(count.eq.${record.count},combo.gt.${record.combo})`,
+          `and(count.eq.${record.count},combo.eq.${record.combo},id.lt.${record.id})`
+        ].join(','));
+
+      if (error) return null;
+      return (count ?? 0) + 1;
+    }
+
+    async function updateRankingSubmitRow(client, allRankings) {
+      const rankCell = document.getElementById('my-rank-cell');
+      const countCell = document.getElementById('my-count-cell');
+      const comboCell = document.getElementById('my-combo-cell');
+
+      let displayRank = '-';
+      let displayCount = currentCount;
+      let displayCombo = maxCombo;
+
+      if (myRankingRecord && client) {
+        displayCount = myRankingRecord.count;
+        displayCombo = myRankingRecord.combo;
+        nicknameInput.value = myRankingRecord.nickname;
+
+        const listIndex = allRankings ? allRankings.findIndex((row) => row.id === myRankingRecord.id) : -1;
+        if (listIndex >= 0) {
+          displayRank = listIndex + 1;
+        } else {
+          displayRank = await getRankForRecord(client, myRankingRecord) ?? '-';
+        }
+      } else if (client && (currentCount > 0 || maxCombo > 0)) {
+        displayRank = await getProjectedRank(client, currentCount, maxCombo) ?? '-';
+      }
+
+      countCell.textContent = displayCount;
+      comboCell.textContent = displayCombo;
+      applyRankCellStyle(rankCell, displayRank);
+    }
+
+    function getRankingTotalPages(len) {
+      if (len <= 0) return 0;
+      return Math.min(RANKING_MAX / RANKING_PAGE_SIZE, Math.ceil(len / RANKING_PAGE_SIZE));
+    }
+
+    function renderRankingTablePage() {
+      const tbody = document.getElementById('ranking-body');
+      const start = (rankingPage - 1) * RANKING_PAGE_SIZE;
+      const slice = rankingDataCache.slice(start, start + RANKING_PAGE_SIZE);
+      tbody.innerHTML = slice.map((row, i) => renderRankingRow(row, start + i + 1)).join('');
+    }
+
+    function renderRankingPagination() {
+      const totalPages = getRankingTotalPages(rankingDataCache.length);
+      if (totalPages <= 1) {
+        rankingPaginationEl.innerHTML = '';
+        return;
+      }
+      if (rankingPage > totalPages) rankingPage = totalPages;
+      rankingPaginationEl.innerHTML = Array.from({ length: totalPages }, (_, i) => {
+        const page = i + 1;
+        const active = page === rankingPage ? ' is-active' : '';
+        return `<button type="button" class="ranking-page-btn${active}" data-page="${page}">${page}</button>`;
       }).join('');
+    }
+
+    async function loadRankings() {
+      const tbody = document.getElementById('ranking-body');
+      tbody.innerHTML = '<tr><td colspan="5" class="ranking-loading">불러오는 중...</td></tr>';
+      rankingPaginationEl.innerHTML = '';
+
+      const client = initSupabase();
+      if (!client) {
+        tbody.innerHTML = '<tr><td colspan="5" class="ranking-loading">Supabase 연결 실패 — URL/KEY 확인</td></tr>';
+        rankingDataCache = [];
+        await updateRankingSubmitRow(null, null);
+        return;
+      }
+
+      const { data, error } = await client
+        .from('rankings')
+        .select('id, nickname, count, combo')
+        .order('count', { ascending: false })
+        .order('combo', { ascending: false })
+        .order('id', { ascending: true })
+        .limit(RANKING_MAX);
+
+      if (error || !data) {
+        tbody.innerHTML = '<tr><td colspan="5" class="ranking-loading">불러오기 실패</td></tr>';
+        rankingDataCache = [];
+        await updateRankingSubmitRow(client, null);
+        return;
+      }
+
+      rankingDataCache = data;
+
+      if (rankingDataCache.length === 0) {
+        tbody.innerHTML = '<tr><td colspan="5" class="ranking-loading">아직 기록이 없습니다</td></tr>';
+      } else {
+        const totalPages = getRankingTotalPages(rankingDataCache.length);
+        if (rankingPage > totalPages) rankingPage = totalPages;
+        renderRankingTablePage();
+        renderRankingPagination();
+      }
+
+      await updateRankingSubmitRow(client, rankingDataCache);
     }
 
     function escapeHtml(str) {
@@ -1030,32 +1405,45 @@
       btn.disabled = true;
       btn.textContent = '등록 중...';
 
-      const { error } = await client
+      const { data, error } = await client
         .from('rankings')
         .insert([{
           nickname: nickname.trim(),
           count: currentCount,
           combo: maxCombo
-        }]);
+        }])
+        .select('id, nickname, count, combo')
+        .single();
 
-      if (error) {
+      if (error || !data) {
         btn.disabled = false;
         btn.textContent = '등록하기';
         alert('등록 실패. 다시 시도해주세요.');
         return;
       }
 
+      myRankingRecord = data;
       scoreSubmitted = true;
+      nicknameInput.disabled = true;
+      btnSubmitScore.disabled = true;
       btn.textContent = '등록 완료 ✓';
       await loadRankings();
+      const myIndex = rankingDataCache.findIndex((row) => row.id === myRankingRecord.id);
+      if (myIndex >= 0) {
+        rankingPage = Math.floor(myIndex / RANKING_PAGE_SIZE) + 1;
+        renderRankingTablePage();
+        renderRankingPagination();
+      }
     }
 
     function showRankingScreen() {
       rankingScreenEl.classList.remove('hidden');
       mainMenuEl.classList.add('hidden');
+      rankingPage = 1;
       nicknameInput.disabled = scoreSubmitted;
       btnSubmitScore.disabled = scoreSubmitted;
       btnSubmitScore.textContent = scoreSubmitted ? '등록 완료 ✓' : '등록하기';
+      if (!scoreSubmitted) nicknameInput.value = '';
       loadRankings();
     }
 
@@ -1075,6 +1463,7 @@
       cutCount = 0;
       currentCount = 0;
       scoreSubmitted = false;
+      myRankingRecord = null;
       parryActive = false;
       parryTimer = 0;
       screenFlash = 0;
@@ -1155,8 +1544,9 @@
       return width;
     }
 
-    function drawDigitRow(ctx, digits, leftX, baselineY, sizePx, gap) {
+    function drawDigitRow(ctx, digits, leftX, baselineY, sizePx, gap, fillColor) {
       setUiFont(ctx, sizePx);
+      if (fillColor) ctx.fillStyle = fillColor;
       let x = leftX;
       for (let i = 0; i < digits.length; i++) {
         ctx.fillText(digits[i], x, baselineY);
@@ -1164,10 +1554,11 @@
       }
     }
 
-    function drawTrackedText(ctx, text, centerX, baselineY, sizePx, trackingPx) {
+    function drawTrackedText(ctx, text, centerX, baselineY, sizePx, trackingPx, fillColor) {
       const metrics = measureTrackedText(ctx, text, sizePx, trackingPx);
       let x = centerX - metrics.width * 0.5;
       setUiFont(ctx, sizePx);
+      if (fillColor) ctx.fillStyle = fillColor;
       for (let i = 0; i < text.length; i++) {
         ctx.fillText(text[i], x, baselineY);
         x += ctx.measureText(text[i]).width + (i < text.length - 1 ? trackingPx : 0);
@@ -1211,8 +1602,8 @@
       const stackGap = Math.max(COMBO_STACK_GAP_MIN, digitH * COMBO_STACK_GAP_RATIO);
       const labelH = labelFontSize * 1.15;
       const blockH = digitH + stackGap + labelH;
-      const stackBottomY = anchor.stackBottomY;
-      const blockCenterY = stackBottomY - blockH * 0.5;
+      const blockCenterY = anchor.stackCenterY;
+      const stackBottomY = blockCenterY + blockH * 0.5;
       const comboBaseline = stackBottomY - labelFontSize * 0.12;
       const digitBaseline = stackBottomY - labelH - stackGap - digitFontSize * 0.12;
 
@@ -1221,8 +1612,8 @@
       ctx.scale(pop, pop);
       ctx.translate(-centerX, -blockCenterY);
 
-      drawDigitRow(ctx, digits, centerX - totalDigitW * 0.5, digitBaseline, digitFontSize, digitGap);
-      drawTrackedText(ctx, 'COMBO', centerX, comboBaseline, labelFontSize, UI_LABEL_TRACK * (labelFontSize / UI_LABEL_PX));
+      drawDigitRow(ctx, digits, centerX - totalDigitW * 0.5, digitBaseline, digitFontSize, digitGap, COMBO_COLOR);
+      drawTrackedText(ctx, 'COMBO', centerX, comboBaseline, labelFontSize, UI_LABEL_TRACK * (labelFontSize / UI_LABEL_PX), COMBO_COLOR);
       ctx.restore();
     }
 
@@ -1260,9 +1651,41 @@
     }
 
     function spawnAttack() {
+      _spawnSingleArrow();
+    }
+
+    function getArrowTravelTime() {
+      if (cutCount > COUNT_FAST_THRESHOLD) {
+        return ARROW_TRAVEL_MIN + Math.random() * (ARROW_TRAVEL_FAST_MAX - ARROW_TRAVEL_MIN);
+      }
+
+      const d = getEffectiveDifficulty();
+      const progress = (d - 1) / (DIFFICULTY_MAX - 1);
+      const baseTime = ARROW_TRAVEL_MAX - progress * (ARROW_TRAVEL_MAX - ARROW_TRAVEL_MIN);
+      const variance = 0.88 + Math.random() * 0.24;
+      return Math.max(ARROW_TRAVEL_MIN, Math.min(ARROW_TRAVEL_MAX, baseTime * variance));
+    }
+
+    function getArrowFlightVector(atk) {
+      const dx = atk.targetX - atk.startX;
+      const dy = atk.targetY - atk.startY;
+      const dist = Math.hypot(dx, dy) || 1;
+      const speed = dist / atk.travelTime;
+      return { vx: (dx / dist) * speed, vy: (dy / dist) * speed };
+    }
+
+    function getArrowPosition(atk, elapsed) {
+      const t = Math.min(1, elapsed / atk.travelTime);
+      return {
+        x: atk.startX + (atk.targetX - atk.startX) * t,
+        y: atk.startY + (atk.targetY - atk.startY) * t
+      };
+    }
+
+    function _spawnSingleArrow() {
       const edge = Math.floor(Math.random() * 3);
       let x, y;
-      const margin = 30;
+      const margin = s(30);
 
       if (edge === 0) {
         x = margin + Math.random() * (W - margin * 2);
@@ -1278,18 +1701,20 @@
       const cc = getCombatCenter();
       const dx = cc.x - x;
       const dy = cc.y - y;
-      const dist = Math.hypot(dx, dy);
-      const baseTime = Math.max(0.34, 0.58 - difficulty * 0.015);
-      const travelTime = Math.max(0.34, baseTime * (0.55 + Math.random() * 0.85));
-      const speed = dist / travelTime;
+      const travelTime = getArrowTravelTime();
 
       attacks.push({
-        x, y,
-        vx: (dx / dist) * speed,
-        vy: (dy / dist) * speed,
+        startX: x,
+        startY: y,
+        targetX: cc.x,
+        targetY: cc.y,
+        travelTime,
+        elapsed: 0,
+        x,
+        y,
         angle: Math.atan2(dy, dx),
-        length: 88,
-        thickness: 8,
+        length: s(88),
+        thickness: s(8),
         alive: true,
         parried: false
       });
@@ -1304,19 +1729,20 @@
     function isInParryZone(ax, ay) {
       const cc = getCombatCenter();
       const dist = Math.hypot(ax - cc.x, ay - cc.y);
-      return dist <= PARRY_RADIUS && dist > getBodyHitRadius() && isInParryArc(ax, ay);
+      const parryRadius = getParryRadius();
+      return dist <= parryRadius && dist > getBodyHitRadius() && isInParryArc(ax, ay);
     }
 
     function canParryAttack(atk, dt) {
       if (isInParryZone(atk.x, atk.y)) return true;
 
       const cc = getCombatCenter();
-      const px = atk.x - atk.vx * dt;
-      const py = atk.y - atk.vy * dt;
-      const prevDist = Math.hypot(px - cc.x, py - cc.y);
+      const prevPos = getArrowPosition(atk, Math.max(0, atk.elapsed - dt));
+      const prevDist = Math.hypot(prevPos.x - cc.x, prevPos.y - cc.y);
       const dist = Math.hypot(atk.x - cc.x, atk.y - cc.y);
+      const parryRadius = getParryRadius();
 
-      if (prevDist > PARRY_RADIUS && dist <= PARRY_RADIUS && dist > getBodyHitRadius() && isInParryArc(atk.x, atk.y)) {
+      if (prevDist > parryRadius && dist <= parryRadius && dist > getBodyHitRadius() && isInParryArc(atk.x, atk.y)) {
         return true;
       }
       return false;
@@ -1351,16 +1777,17 @@
         { offset: 0.08, len: 0.48, ang: -0.65, px: -120, py: 80, spin: -5 }
       ];
 
-      for (const s of specs) {
+      for (const spec of specs) {
+        const flight = getArrowFlightVector(atk);
         brokenSticks.push({
-          x: atk.x + fwdX * atk.length * s.offset,
-          y: atk.y + fwdY * atk.length * s.offset,
-          angle: atk.angle + s.ang,
-          length: atk.length * s.len,
+          x: atk.x + fwdX * atk.length * spec.offset,
+          y: atk.y + fwdY * atk.length * spec.offset,
+          angle: atk.angle + spec.ang,
+          length: atk.length * spec.len,
           thickness: atk.thickness,
-          vx: atk.vx * 0.12 + perpX * s.px + fwdX * 30,
-          vy: atk.vy * 0.12 + perpY * s.py + fwdY * 30,
-          spin: s.spin,
+          vx: flight.vx * 0.12 + perpX * s(spec.px) + fwdX * s(30),
+          vy: flight.vy * 0.12 + perpY * s(spec.py) + fwdY * s(30),
+          spin: spec.spin,
           life: 0.22,
           maxLife: 0.22
         });
@@ -1393,7 +1820,7 @@
       slashes.push({
         x: cc.x, y: cc.y,
         angle: cfg.angle,
-        len: PARRY_RADIUS * 0.85,
+        len: getParryRadius() * 0.85,
         t: 0, dur: 0.14
       });
     }
@@ -1411,7 +1838,7 @@
       spawnSparkParticles(attack.x, attack.y, attack.angle + Math.PI);
       stamina = Math.min(MAX_STAMINA, stamina + STAMINA_SWING_COST);
       updateHUD();
-      difficulty = Math.min(difficulty + 0.025, 5);
+      difficulty = Math.min(DIFFICULTY_MAX, difficulty + getComboDiffBonus());
     }
 
     function takeHit() {
@@ -1435,7 +1862,7 @@
       stamina -= STAMINA_SWING_COST;
       updateHUD();
       parryActive = true;
-      parryTimer = PARRY_WINDOW;
+      parryTimer = getParryWindow();
 
       const nearestAttack = attacks
         .filter(a => a.alive)
@@ -1445,7 +1872,10 @@
         )[0];
 
       const slashPattern = nearestAttack
-        ? pickSlashPatternFromSource(nearestAttack.vx, nearestAttack.vy)
+        ? (() => {
+            const flight = getArrowFlightVector(nearestAttack);
+            return pickSlashPatternFromSource(flight.vx, flight.vy);
+          })()
         : pickRandomSlashPattern();
 
       charPattern = slashPattern;
@@ -1465,8 +1895,10 @@
       for (const atk of attacks) {
         if (!atk.alive) continue;
 
-        atk.x += atk.vx * dt;
-        atk.y += atk.vy * dt;
+        atk.elapsed += dt;
+        const pos = getArrowPosition(atk, atk.elapsed);
+        atk.x = pos.x;
+        atk.y = pos.y;
 
         const cc = getCombatCenter();
         const dist = Math.hypot(atk.x - cc.x, atk.y - cc.y);
@@ -1564,7 +1996,7 @@
       ctx.strokeStyle = 'rgba(0, 0, 0, 0.85)';
       ctx.lineWidth = 1.5;
       ctx.beginPath();
-      ctx.arc(cc.x, cc.y, PARRY_RADIUS, Math.PI, 0, false);
+      ctx.arc(cc.x, cc.y, getParryRadius(), Math.PI, 0, false);
       ctx.stroke();
     }
 
@@ -1589,7 +2021,9 @@
       ctx.translate(atk.x, atk.y);
       ctx.rotate(atk.angle);
 
-      ctx.strokeStyle = '#111';
+      ctx.strokeStyle = difficulty >= 3 ? '#333' : '#111';
+      ctx.setLineDash([]);
+
       ctx.lineWidth = atk.thickness * 0.55;
       ctx.lineCap = 'round';
       ctx.beginPath();
@@ -1611,6 +2045,7 @@
       ctx.lineTo(atk.length * 0.22,  atk.thickness * 1.4);
       ctx.stroke();
 
+      ctx.setLineDash([]);
       ctx.restore();
     }
 
@@ -1638,6 +2073,9 @@
       if (gameOver) return;
 
       gameTime += dt;
+
+      const timeDiffRate = combo >= COMBO_SOFT_CAP ? 0.006 : 0.012;
+      difficulty = Math.min(DIFFICULTY_MAX, difficulty + dt * timeDiffRate);
 
       if (parryTimer > 0) {
         parryTimer -= dt;
@@ -1735,6 +2173,23 @@
       tryParry();
     });
 
+    function shouldIgnoreGameTap(target) {
+      return target && target.closest('button, input, textarea, a, .ranking-table, .menu-btn, .game-over-btn');
+    }
+
+    function handleGameTap(e) {
+      if (shouldIgnoreGameTap(e.target)) return;
+      if (isCoarseMobile() && isPortraitViewport()) return;
+      if (gameState !== GameState.PLAYING) return;
+      if (gameOver) return;
+      e.preventDefault();
+      tryParry();
+    }
+
+    if (gameStageEl) {
+      gameStageEl.addEventListener('touchstart', handleGameTap, { passive: false });
+    }
+
     window.addEventListener('keydown', (e) => {
       if (e.code !== 'Space') return;
       if (gameState !== GameState.PLAYING) return;
@@ -1757,6 +2212,21 @@
     btnGotoRank.addEventListener('click', (e) => {
       e.stopPropagation();
       showRankingScreen();
+    });
+
+    btnHome.addEventListener('click', (e) => {
+      e.stopPropagation();
+      hideGameOverPanel();
+      gameOver = false;
+      setGameState(GameState.MAIN_MENU);
+    });
+
+    rankingPaginationEl.addEventListener('click', (e) => {
+      const btn = e.target.closest('.ranking-page-btn');
+      if (!btn) return;
+      rankingPage = Number(btn.dataset.page);
+      renderRankingTablePage();
+      renderRankingPagination();
     });
 
     btnRankingBack.addEventListener('click', () => {
@@ -1783,6 +2253,10 @@
     });
 
     window.addEventListener('resize', resize);
+    window.addEventListener('orientationchange', resize);
+    if (window.visualViewport) {
+      window.visualViewport.addEventListener('resize', resize);
+    }
     loadCharImages();
     setGameState(GameState.MAIN_MENU);
     resize();
