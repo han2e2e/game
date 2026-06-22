@@ -41,31 +41,12 @@
       align-items: center;
       justify-content: center;
       background: #fff;
+      touch-action: manipulation;
     }
     #game-stage {
       position: relative;
       overflow: hidden;
       touch-action: manipulation;
-    }
-    #rotate-overlay {
-      position: fixed;
-      inset: 0;
-      z-index: 200;
-      background: #fff;
-      display: none;
-      flex-direction: column;
-      align-items: center;
-      justify-content: center;
-      gap: 16px;
-      padding: 24px;
-      text-align: center;
-    }
-    #rotate-overlay.show { display: flex; }
-    #rotate-overlay p {
-      color: #111;
-      font-size: clamp(18px, 4vw, 24px);
-      letter-spacing: 4px;
-      line-height: 1.6;
     }
     canvas {
       display: block;
@@ -82,47 +63,50 @@
       display: flex;
       flex-direction: column;
       justify-content: space-between;
-      padding: 24px 32px;
+      padding: 10px 12px;
     }
     .hud-top {
       display: flex;
       justify-content: space-between;
       align-items: flex-start;
-      gap: 24px;
+      width: 100%;
+      gap: 8px;
     }
     .hp-bar-wrap {
-      width: 220px;
+      flex: 0 0 auto;
       display: flex;
       flex-direction: column;
-      gap: 10px;
+      gap: 6px;
+      align-items: flex-start;
     }
     .hud-stat {
       display: flex;
       flex-direction: column;
-      gap: 6px;
+      gap: 4px;
+      align-items: flex-start;
     }
     .hud-label {
       color: #111;
-      font-size: 11px;
-      letter-spacing: 4px;
+      font-size: 9px;
+      letter-spacing: 2px;
       line-height: 1;
     }
     .hud-blocks {
       display: flex;
       align-items: stretch;
-      gap: 6px;
-      width: 220px;
+      gap: 4px;
+      width: min(108px, 22vw);
     }
     .hud-block {
       flex: 1;
-      height: 10px;
+      height: 7px;
       border: 1px solid #111;
       background: #111;
       box-sizing: border-box;
       transition: background 0.25s ease;
     }
     .stamina-row .hud-block {
-      height: 8px;
+      height: 6px;
       background: #555;
     }
     .hud-block.empty {
@@ -132,37 +116,36 @@
       color: #888;
     }
     .cut-count-wrap {
-      width: 220px;
-      min-height: 62px;
+      flex: 0 0 auto;
+      margin-left: auto;
       display: flex;
-      align-items: flex-end;
+      align-items: flex-start;
       justify-content: flex-end;
     }
     .cut-count-line {
       display: flex;
       align-items: baseline;
       justify-content: flex-end;
-      gap: 10px;
+      gap: 6px;
       line-height: 1;
-      width: 100%;
     }
     .cut-count-label {
       color: #111;
-      font-size: 11px;
-      letter-spacing: 4px;
+      font-size: 9px;
+      letter-spacing: 2px;
     }
     .cut-count-value {
       color: #111;
-      font-size: 34px;
-      letter-spacing: 4px;
+      font-size: 22px;
+      letter-spacing: 2px;
       line-height: 1;
       font-variant-numeric: tabular-nums;
     }
     .hud-bottom {
       text-align: center;
       color: #888;
-      font-size: 11px;
-      letter-spacing: 3px;
+      font-size: 9px;
+      letter-spacing: 2px;
     }
     #game-over {
       position: absolute;
@@ -513,9 +496,6 @@
 </head>
 <body>
   <div id="game-wrap">
-    <div id="rotate-overlay">
-      <p>화살 베기는 가로 모드에 최적화되어 있습니다.<br>기기를 가로로 돌려주세요.</p>
-    </div>
     <div id="game-stage">
     <canvas id="game"></canvas>
     <div id="ui-overlay" class="hidden">
@@ -658,6 +638,230 @@
       return supabase;
     }
 
+    let audioCtx = null;
+    let bgmGain = null;
+    let bgmStarted = false;
+    const BGM_BPM = 88;
+    const BGM_BEAT = 60 / BGM_BPM;
+
+    function noteFreq(midi) {
+      return 440 * Math.pow(2, (midi - 69) / 12);
+    }
+
+    function getAudioCtx() {
+      if (!audioCtx) {
+        audioCtx = new (window.AudioContext || window.webkitAudioContext)();
+      }
+      if (audioCtx.state === 'suspended') {
+        audioCtx.resume().catch(function () {});
+      }
+      return audioCtx;
+    }
+
+    function playSwoosh() {
+      const ctx = getAudioCtx();
+      const dur = 0.22;
+      const bufSize = Math.floor(ctx.sampleRate * dur);
+      const buf = ctx.createBuffer(1, bufSize, ctx.sampleRate);
+      const data = buf.getChannelData(0);
+      for (let i = 0; i < bufSize; i++) {
+        const t = i / bufSize;
+        const env = Math.pow(1 - t, 1.4) * Math.pow(t * 6, 0.3);
+        data[i] = (Math.random() * 2 - 1) * env;
+      }
+      const src = ctx.createBufferSource();
+      src.buffer = buf;
+
+      const bpf = ctx.createBiquadFilter();
+      bpf.type = 'bandpass';
+      bpf.frequency.setValueAtTime(2400, ctx.currentTime);
+      bpf.frequency.linearRampToValueAtTime(900, ctx.currentTime + dur);
+      bpf.Q.value = 1.2;
+
+      const gain = ctx.createGain();
+      gain.gain.setValueAtTime(0.55, ctx.currentTime);
+      gain.gain.linearRampToValueAtTime(0, ctx.currentTime + dur);
+
+      src.connect(bpf);
+      bpf.connect(gain);
+      gain.connect(ctx.destination);
+      src.start();
+      src.stop(ctx.currentTime + dur);
+    }
+
+    function playParrySlash() {
+      const ctx = getAudioCtx();
+      const now = ctx.currentTime;
+
+      const impOsc = ctx.createOscillator();
+      impOsc.type = 'square';
+      impOsc.frequency.setValueAtTime(1800, now);
+      impOsc.frequency.exponentialRampToValueAtTime(280, now + 0.08);
+      const impGain = ctx.createGain();
+      impGain.gain.setValueAtTime(0.38, now);
+      impGain.gain.exponentialRampToValueAtTime(0.001, now + 0.1);
+      impOsc.connect(impGain);
+      impGain.connect(ctx.destination);
+      impOsc.start(now);
+      impOsc.stop(now + 0.1);
+
+      const dur2 = 0.18;
+      const buf2 = ctx.createBuffer(1, Math.floor(ctx.sampleRate * dur2), ctx.sampleRate);
+      const d2 = buf2.getChannelData(0);
+      for (let i = 0; i < d2.length; i++) {
+        d2[i] = (Math.random() * 2 - 1) * Math.pow(1 - i / d2.length, 2.2);
+      }
+      const src2 = ctx.createBufferSource();
+      src2.buffer = buf2;
+      const lpf = ctx.createBiquadFilter();
+      lpf.type = 'lowpass';
+      lpf.frequency.value = 600;
+      const gain2 = ctx.createGain();
+      gain2.gain.setValueAtTime(0.6, now + 0.01);
+      gain2.gain.linearRampToValueAtTime(0, now + dur2);
+      src2.connect(lpf);
+      lpf.connect(gain2);
+      gain2.connect(ctx.destination);
+      src2.start(now + 0.01);
+      src2.stop(now + dur2);
+
+      const ringOsc = ctx.createOscillator();
+      ringOsc.type = 'sine';
+      ringOsc.frequency.value = 620;
+      const ringGain = ctx.createGain();
+      ringGain.gain.setValueAtTime(0.18, now + 0.04);
+      ringGain.gain.exponentialRampToValueAtTime(0.001, now + 0.32);
+      ringOsc.connect(ringGain);
+      ringGain.connect(ctx.destination);
+      ringOsc.start(now + 0.04);
+      ringOsc.stop(now + 0.32);
+    }
+
+    function playHitSound() {
+      const ctx = getAudioCtx();
+      const now = ctx.currentTime;
+      const osc = ctx.createOscillator();
+      osc.type = 'sawtooth';
+      osc.frequency.setValueAtTime(180, now);
+      osc.frequency.exponentialRampToValueAtTime(60, now + 0.25);
+      const gain = ctx.createGain();
+      gain.gain.setValueAtTime(0.45, now);
+      gain.gain.exponentialRampToValueAtTime(0.001, now + 0.28);
+      const dist = ctx.createWaveShaper();
+      const curve = new Float32Array(256);
+      for (let i = 0; i < 256; i++) {
+        const x = (i * 2) / 256 - 1;
+        curve[i] = (Math.PI + 80) * x / (Math.PI + 80 * Math.abs(x));
+      }
+      dist.curve = curve;
+      osc.connect(dist);
+      dist.connect(gain);
+      gain.connect(ctx.destination);
+      osc.start(now);
+      osc.stop(now + 0.28);
+    }
+
+    function startBGM() {
+      if (bgmStarted) return;
+      bgmStarted = true;
+      const ctx = getAudioCtx();
+      bgmGain = ctx.createGain();
+      bgmGain.gain.setValueAtTime(0, ctx.currentTime);
+      bgmGain.gain.linearRampToValueAtTime(0.18, ctx.currentTime + 2.0);
+      bgmGain.connect(ctx.destination);
+      scheduleBGMLoop(ctx.currentTime);
+    }
+
+    function stopBGM() {
+      if (!bgmStarted || !bgmGain) return;
+      bgmStarted = false;
+      const ctx = getAudioCtx();
+      bgmGain.gain.linearRampToValueAtTime(0, ctx.currentTime + 1.2);
+    }
+
+    function scheduleBGMLoop(startTime) {
+      if (!bgmStarted) return;
+      const ctx = getAudioCtx();
+      const barDur = BGM_BEAT * 4;
+
+      [noteFreq(33), noteFreq(40)].forEach(function (freq, i) {
+        const osc = ctx.createOscillator();
+        osc.type = 'sawtooth';
+        osc.frequency.value = freq;
+        const lpf = ctx.createBiquadFilter();
+        lpf.type = 'lowpass';
+        lpf.frequency.value = 200;
+        const g = ctx.createGain();
+        g.gain.setValueAtTime(0, startTime + i * 0.05);
+        g.gain.linearRampToValueAtTime(0.22, startTime + 0.3);
+        g.gain.linearRampToValueAtTime(0, startTime + barDur);
+        osc.connect(lpf); lpf.connect(g); g.connect(bgmGain);
+        osc.start(startTime); osc.stop(startTime + barDur);
+      });
+
+      [0, 2].forEach(function (beat) {
+        const t = startTime + beat * BGM_BEAT;
+        const osc = ctx.createOscillator();
+        osc.type = 'sine';
+        osc.frequency.setValueAtTime(160, t);
+        osc.frequency.exponentialRampToValueAtTime(40, t + 0.18);
+        const g = ctx.createGain();
+        g.gain.setValueAtTime(0.7, t);
+        g.gain.exponentialRampToValueAtTime(0.001, t + 0.22);
+        osc.connect(g); g.connect(bgmGain);
+        osc.start(t); osc.stop(t + 0.22);
+      });
+
+      [1, 3].forEach(function (beat) {
+        const t = startTime + beat * BGM_BEAT;
+        const dur = 0.14;
+        const buf = ctx.createBuffer(1, Math.floor(ctx.sampleRate * dur), ctx.sampleRate);
+        const data = buf.getChannelData(0);
+        for (let i = 0; i < data.length; i++) {
+          data[i] = (Math.random() * 2 - 1) * Math.pow(1 - i / data.length, 1.8);
+        }
+        const src = ctx.createBufferSource();
+        src.buffer = buf;
+        const hpf = ctx.createBiquadFilter();
+        hpf.type = 'highpass';
+        hpf.frequency.value = 1800;
+        const g = ctx.createGain();
+        g.gain.setValueAtTime(0.28, t);
+        g.gain.linearRampToValueAtTime(0, t + dur);
+        src.connect(hpf); hpf.connect(g); g.connect(bgmGain);
+        src.start(t); src.stop(t + dur);
+      });
+
+      const melody = [
+        { midi: 57, beat: 0,   dur: 0.5 },
+        { midi: 60, beat: 0.5, dur: 0.5 },
+        { midi: 62, beat: 1,   dur: 0.5 },
+        { midi: 60, beat: 1.5, dur: 0.5 },
+        { midi: 57, beat: 2,   dur: 1.0 },
+        { midi: 55, beat: 3,   dur: 0.5 },
+        { midi: 53, beat: 3.5, dur: 0.5 },
+      ];
+      melody.forEach(function (note) {
+        const t = startTime + note.beat * BGM_BEAT;
+        const osc = ctx.createOscillator();
+        osc.type = 'square';
+        osc.frequency.value = noteFreq(note.midi);
+        const noteDur = note.dur * BGM_BEAT;
+        const g = ctx.createGain();
+        g.gain.setValueAtTime(0, t);
+        g.gain.linearRampToValueAtTime(0.07, t + 0.02);
+        g.gain.setValueAtTime(0.07, t + noteDur - 0.04);
+        g.gain.linearRampToValueAtTime(0, t + noteDur);
+        osc.connect(g); g.connect(bgmGain);
+        osc.start(t); osc.stop(t + noteDur);
+      });
+
+      const delay = (startTime + barDur - ctx.currentTime - 0.05) * 1000;
+      setTimeout(function () {
+        if (bgmStarted) scheduleBGMLoop(startTime + barDur);
+      }, Math.max(0, delay));
+    }
+
     let scoreSubmitted = false;
     let currentCount = 0;
     let myRankingRecord = null;
@@ -669,7 +873,7 @@
     const canvas = document.getElementById('game');
     const ctx = canvas.getContext('2d');
     const gameStageEl = document.getElementById('game-stage');
-    const rotateOverlayEl = document.getElementById('rotate-overlay');
+    const gameWrapEl = document.getElementById('game-wrap');
     const hudParryHintEl = document.getElementById('hud-parry-hint');
     const hpBlocksEl = document.getElementById('hp-blocks');
     const staminaBlocksEl = document.getElementById('stamina-blocks');
@@ -909,11 +1113,6 @@
         || /Android|iPhone|iPad|iPod|Mobile/i.test(navigator.userAgent);
     }
 
-    function isPortraitViewport() {
-      const { w, h } = getViewportSize();
-      return h > w;
-    }
-
     function getParryWindow() {
       return isCoarseMobile() ? PARRY_WINDOW_MOBILE : PARRY_WINDOW;
     }
@@ -923,11 +1122,6 @@
       hudParryHintEl.textContent = isCoarseMobile()
         ? 'TAP — PARRY'
         : 'LEFT CLICK / SPACE — PARRY';
-    }
-
-    function updateOrientationOverlay() {
-      if (!rotateOverlayEl) return;
-      rotateOverlayEl.classList.toggle('show', isCoarseMobile() && isPortraitViewport());
     }
 
     function tryLockLandscape() {
@@ -947,7 +1141,6 @@
     }
 
     function resize() {
-      updateOrientationOverlay();
       updateParryHint();
 
       const { w: vw, h: vh } = getViewportSize();
@@ -979,12 +1172,17 @@
       gameState = state;
       mainMenuEl.classList.toggle('hidden', state !== GameState.MAIN_MENU);
       uiOverlayEl.classList.toggle('hidden', state !== GameState.PLAYING);
+      if (state === GameState.MAIN_MENU) {
+        stopBGM();
+      }
     }
 
     function startGame() {
       tryLockLandscape();
       setGameState(GameState.PLAYING);
       resetGame();
+      bgmStarted = false;
+      startBGM();
       lastTime = performance.now();
     }
 
@@ -993,22 +1191,35 @@
     }
 
     function getComboDiffBonus() {
-      if (combo >= COMBO_SOFT_CAP) return 0.015;
-      if (combo >= 10) return 0.05;
-      if (combo >= 5) return 0.035;
-      return 0.025;
+      if (combo >= 20) return 0.012;
+      if (combo >= 10) return 0.020;
+      return 0.010;
     }
 
     function scheduleNextSpawn() {
       const d = getEffectiveDifficulty();
-      const minGap = Math.max(0.65, 1.05 - d * 0.045);
-      const maxGap = 4.5;
+
+      let minGap, maxGap;
+
+      if (d < 1.5) {
+        minGap = 1.8; maxGap = 3.5;
+      } else if (d < 2.5) {
+        minGap = 1.4; maxGap = 2.8;
+      } else if (d < 3.5) {
+        minGap = 1.0; maxGap = 2.0;
+      } else if (d < 4.5) {
+        minGap = 0.7; maxGap = 1.4;
+      } else {
+        minGap = 0.5; maxGap = 1.0;
+      }
+
       spawnInterval = minGap + Math.random() * (maxGap - minGap);
     }
 
     function showGameOverPanel() {
       finalScoreEl.textContent = '카운트 : ' + cutCount + '개\u00A0\u00A0최대콤보 : ' + maxCombo + '개';
       gameOverEl.classList.add('show');
+      stopBGM();
     }
 
     function hideGameOverPanel() {
@@ -1439,20 +1650,47 @@
       screenFlash = 0.18;
     }
 
+    function triggerMilestoneFlash(comboCount) {
+      screenFlash = 0.35;
+    }
+
     function spawnAttack() {
+      const aliveCount = attacks.filter(a => a.alive).length;
+      if (aliveCount > 0) {
+        spawnTimer = spawnInterval * 0.6;
+        return;
+      }
       _spawnSingleArrow();
     }
 
     function getArrowTravelTime() {
-      if (cutCount > COUNT_FAST_THRESHOLD) {
-        return ARROW_TRAVEL_MIN + Math.random() * (ARROW_TRAVEL_FAST_MAX - ARROW_TRAVEL_MIN);
+      const d = getEffectiveDifficulty();
+
+      if (d < 1.5) {
+        const isFast = Math.random() < 0.25;
+        return isFast
+          ? 0.50 + Math.random() * 0.15
+          : 1.10 + Math.random() * 0.50;
       }
 
-      const d = getEffectiveDifficulty();
-      const progress = (d - 1) / (DIFFICULTY_MAX - 1);
-      const baseTime = ARROW_TRAVEL_MAX - progress * (ARROW_TRAVEL_MAX - ARROW_TRAVEL_MIN);
-      const variance = 0.88 + Math.random() * 0.24;
-      return Math.max(ARROW_TRAVEL_MIN, Math.min(ARROW_TRAVEL_MAX, baseTime * variance));
+      if (d < 2.5) {
+        const r = Math.random();
+        if (r < 0.20) return 0.45 + Math.random() * 0.10;
+        if (r < 0.55) return 0.72 + Math.random() * 0.20;
+        return 0.95 + Math.random() * 0.35;
+      }
+
+      if (d < 3.5) {
+        const r = Math.random();
+        if (r < 0.40) return 0.42 + Math.random() * 0.10;
+        return 0.65 + Math.random() * 0.18;
+      }
+
+      if (d < 4.5) {
+        return 0.38 + Math.random() * 0.12;
+      }
+
+      return 0.32 + Math.random() * 0.10;
     }
 
     function getArrowFlightVector(atk) {
@@ -1623,7 +1861,11 @@
       combo++;
       if (combo > maxCombo) maxCombo = combo;
       bumpComboVisual();
+      if ([5, 10, 20, 30, 50].includes(combo)) {
+        triggerMilestoneFlash(combo);
+      }
       triggerFlash();
+      playParrySlash();
       spawnSparkParticles(attack.x, attack.y, attack.angle + Math.PI);
       stamina = Math.min(MAX_STAMINA, stamina + STAMINA_SWING_COST);
       updateHUD();
@@ -1635,6 +1877,7 @@
       comboPop = 0;
       charState = 'hit';
       charShakeTimer = 0.32;
+      playHitSound();
       hp = Math.max(0, hp - HIT_DAMAGE);
       updateHUD();
       if (hp <= 0) {
@@ -1671,6 +1914,7 @@
       charState = 'draw';
       charTimer = 0.06;
       spawnSlash(slashPattern);
+      playSwoosh();
 
       for (const atk of attacks) {
         if (!atk.alive) continue;
@@ -1851,10 +2095,17 @@
     }
 
     function drawScreenFlash() {
-      if (screenFlash > 0) {
-        ctx.fillStyle = `rgba(0, 0, 0, ${screenFlash * 0.08})`;
-        ctx.fillRect(0, 0, W, H);
+      if (screenFlash <= 0) return;
+      let color;
+      if (combo >= 20) {
+        color = `rgba(180, 60, 60, ${screenFlash * 0.10})`;
+      } else if (combo >= 10) {
+        color = `rgba(100, 100, 180, ${screenFlash * 0.09})`;
+      } else {
+        color = `rgba(0, 0, 0, ${screenFlash * 0.08})`;
       }
+      ctx.fillStyle = color;
+      ctx.fillRect(0, 0, W, H);
     }
 
     function update(dt) {
@@ -1863,8 +2114,7 @@
 
       gameTime += dt;
 
-      const timeDiffRate = combo >= COMBO_SOFT_CAP ? 0.006 : 0.012;
-      difficulty = Math.min(DIFFICULTY_MAX, difficulty + dt * timeDiffRate);
+      difficulty = Math.min(DIFFICULTY_MAX, difficulty + dt * 0.035);
 
       if (parryTimer > 0) {
         parryTimer -= dt;
@@ -1956,6 +2206,7 @@
     }
 
     canvas.addEventListener('mousedown', (e) => {
+      if (isCoarseMobile()) return;
       if (e.button !== 0) return;
       if (gameState !== GameState.PLAYING) return;
       if (gameOver) return;
@@ -1968,15 +2219,14 @@
 
     function handleGameTap(e) {
       if (shouldIgnoreGameTap(e.target)) return;
-      if (isCoarseMobile() && isPortraitViewport()) return;
       if (gameState !== GameState.PLAYING) return;
       if (gameOver) return;
       e.preventDefault();
       tryParry();
     }
 
-    if (gameStageEl) {
-      gameStageEl.addEventListener('touchstart', handleGameTap, { passive: false });
+    if (gameWrapEl) {
+      gameWrapEl.addEventListener('touchstart', handleGameTap, { passive: false });
     }
 
     window.addEventListener('keydown', (e) => {
@@ -2046,6 +2296,16 @@
     if (window.visualViewport) {
       window.visualViewport.addEventListener('resize', resize);
     }
+
+    function resumeAudio() {
+      tryLockLandscape();
+      if (audioCtx && audioCtx.state === 'suspended') {
+        audioCtx.resume().catch(function () {});
+      }
+    }
+    document.addEventListener('pointerdown', resumeAudio);
+    document.addEventListener('keydown', resumeAudio);
+
     loadCharImages();
     setGameState(GameState.MAIN_MENU);
     resize();
