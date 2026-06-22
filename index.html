@@ -12,14 +12,14 @@
   <meta property="og:site_name" content="화살베기">
   <meta property="og:title" content="화살베기">
   <meta property="og:description" content="날아오는 화살을 타이밍에 맞게 클릭/스페이스바로 눌러서 베는 게임입니다.">
-  <meta property="og:url" content="https://game-lemon-zeta.vercel.app/">
-  <meta property="og:image" content="https://game-lemon-zeta.vercel.app/og-preview.png">
+  <meta property="og:url" content="https://arrowslash.vercel.app/">
+  <meta property="og:image" content="https://arrowslash.vercel.app/og-preview.png">
   <meta property="og:image:alt" content="화살베기">
   <meta property="og:locale" content="ko_KR">
   <meta name="twitter:card" content="summary_large_image">
   <meta name="twitter:title" content="화살베기">
   <meta name="twitter:description" content="날아오는 화살을 타이밍에 맞게 클릭/스페이스바로 눌러서 베는 게임입니다.">
-  <meta name="twitter:image" content="https://game-lemon-zeta.vercel.app/og-preview.png">
+  <meta name="twitter:image" content="https://arrowslash.vercel.app/og-preview.png">
   <meta name="twitter:image:alt" content="화살베기">
   <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
   <style>
@@ -991,7 +991,6 @@
       gameState = state;
       mainMenuEl.classList.toggle('hidden', state !== GameState.MAIN_MENU);
       uiOverlayEl.classList.toggle('hidden', state !== GameState.PLAYING);
-      canvas.style.cursor = state === GameState.PLAYING ? 'crosshair' : 'default';
     }
 
     function startGame() {
