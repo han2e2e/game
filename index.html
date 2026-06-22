@@ -1099,6 +1099,7 @@
     };
 
     const PARRY_RADIUS = 130;
+    const PARRY_UPPER_RADIUS_MULT = 1.1;
     const REF_W = 1600;
     const REF_H = 900;
     const PLAYER_FOOT_OFFSET = 90;
@@ -1191,6 +1192,19 @@
 
     function getParryRadius() {
       return s(PARRY_RADIUS);
+    }
+
+    function isInUpperParrySector(ax, ay) {
+      const cc = getCombatCenter();
+      const angle = Math.atan2(ay - cc.y, ax - cc.x);
+      if (angle > 0 || angle < -Math.PI) return false;
+      return Math.abs(angle + Math.PI / 2) <= Math.PI / 3;
+    }
+
+    function getParryRadiusAt(ax, ay) {
+      return isInUpperParrySector(ax, ay)
+        ? getParryRadius() * PARRY_UPPER_RADIUS_MULT
+        : getParryRadius();
     }
 
     function getCharHeight() {
@@ -2019,7 +2033,7 @@
     function isInParryZone(ax, ay) {
       const cc = getCombatCenter();
       const dist = Math.hypot(ax - cc.x, ay - cc.y);
-      const parryRadius = getParryRadius();
+      const parryRadius = getParryRadiusAt(ax, ay);
       return dist <= parryRadius && dist > getBodyHitRadius() && isInParryArc(ax, ay);
     }
 
@@ -2030,9 +2044,10 @@
       const prevPos = getArrowPosition(atk, Math.max(0, atk.elapsed - dt));
       const prevDist = Math.hypot(prevPos.x - cc.x, prevPos.y - cc.y);
       const dist = Math.hypot(atk.x - cc.x, atk.y - cc.y);
-      const parryRadius = getParryRadius();
+      const parryRadius = getParryRadiusAt(atk.x, atk.y);
+      const prevParryRadius = getParryRadiusAt(prevPos.x, prevPos.y);
 
-      if (prevDist > parryRadius && dist <= parryRadius && dist > getBodyHitRadius() && isInParryArc(atk.x, atk.y)) {
+      if (prevDist > prevParryRadius && dist <= parryRadius && dist > getBodyHitRadius() && isInParryArc(atk.x, atk.y)) {
         return true;
       }
       return false;
