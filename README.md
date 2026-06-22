@@ -4,7 +4,7 @@
 
 ## 플레이
 
-- **프로덕션**: https://game-self-two-94.vercel.app
+- **프로덕션**: https://game-lemon-zeta.vercel.app
 - **로컬**: `index.html`을 브라우저에서 열기
 
 ## 연동 구조
