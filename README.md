@@ -14,7 +14,10 @@
 index.html              게임 본체
 캐릭터*.png             캐릭터 스프라이트 (8장)
 favicon*.png            파비콘
-og-preview.png          SNS 공유 미리보기
+og-preview.png          카카오·트위터 등 링크 미리보기
+instagram-preview.png   인스타용 미리보기 (별도)
+tools/icon-source.jpg   파비콘 원본
+tools/instagram-source.jpg  인스타 미리보기 원본
 supabase/schema.sql     랭킹 DB 스키마
 tools/process-favicon.js  파비콘 재생성 스크립트 (선택)
 ```
