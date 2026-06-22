@@ -3,7 +3,15 @@ const path = require('path');
 const { PNG } = require('pngjs');
 
 const root = path.join(__dirname, '..');
-const srcPath = path.join(root, '아이콘.png');
+const srcPath = process.argv[2]
+  ? path.resolve(process.argv[2])
+  : null;
+
+if (!srcPath || !fs.existsSync(srcPath)) {
+  console.error('Usage: node tools/process-favicon.js <icon-source.png>');
+  console.error('Generates favicon.png, favicon-32.png, apple-touch-icon.png in project root.');
+  process.exit(1);
+}
 
 function isBackground(r, g, b, a) {
   if (a <= 8) return true;

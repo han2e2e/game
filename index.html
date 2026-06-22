@@ -158,16 +158,12 @@
       line-height: 1;
       font-variant-numeric: tabular-nums;
     }
-    .combo-box {
-      display: none;
-    }
     .hud-bottom {
       text-align: center;
       color: #888;
       font-size: 11px;
       letter-spacing: 3px;
     }
-    #flash-overlay { display: none; }
     #game-over {
       position: absolute;
       inset: 0;
@@ -522,7 +518,6 @@
     </div>
     <div id="game-stage">
     <canvas id="game"></canvas>
-    <div id="flash-overlay"></div>
     <div id="ui-overlay" class="hidden">
       <div class="hud-top">
         <div class="hp-bar-wrap">
@@ -680,7 +675,6 @@
     const staminaBlocksEl = document.getElementById('stamina-blocks');
     const staminaWrap = document.getElementById('stamina-wrap');
     const cutCountEl = document.getElementById('cut-count');
-    const flashOverlay = document.getElementById('flash-overlay');
     const gameOverEl = document.getElementById('game-over');
     const finalScoreEl = document.getElementById('final-score');
     const btnRetry = document.getElementById('btn-retry');
@@ -767,7 +761,6 @@
     const COMBO_SIZE_SCALE = 0.7;
     const COMBO_SCREEN_CENTER_Y_RATIO = 0.34;
     const COMBO_COLOR = '#111';
-    const INK_PAD_RATIO = 0.018;
 
     const attacks = [];
     const particles = [];
@@ -847,11 +840,6 @@
         x: W * 0.5,
         stackCenterY: H * COMBO_SCREEN_CENTER_Y_RATIO
       };
-    }
-
-    function attachPresetCenter(ink, preset) {
-      if (preset && preset.cx != null) ink.cx = preset.cx;
-      return ink;
     }
 
     function getCombatCenter() {
@@ -998,204 +986,6 @@
       setGameState(GameState.PLAYING);
       resetGame();
       lastTime = performance.now();
-    }
-
-    function isKnockoutPixel(r, g, b, a, threshold) {
-      if (a <= 8) return true;
-      const spread = Math.max(r, g, b) - Math.min(r, g, b);
-      if (spread >= 42) return false;
-      return (r + g + b) / 3 >= threshold;
-    }
-
-    function applyWhiteKnockout(data, whiteThreshold = 235) {
-      for (let i = 0; i < data.length; i += 4) {
-        if (isKnockoutPixel(data[i], data[i + 1], data[i + 2], data[i + 3], whiteThreshold)) {
-          data[i + 3] = 0;
-        }
-      }
-    }
-
-    function floodRemoveBackground(data, w, h, threshold) {
-      const visited = new Uint8Array(w * h);
-      const stack = [];
-      function tryPush(x, y) {
-        if (x < 0 || y < 0 || x >= w || y >= h) return;
-        const idx = y * w + x;
-        if (visited[idx]) return;
-        const i = idx * 4;
-        if (!isKnockoutPixel(data[i], data[i + 1], data[i + 2], data[i + 3], threshold)) return;
-        visited[idx] = 1;
-        stack.push(x, y);
-      }
-      for (let x = 0; x < w; x++) {
-        tryPush(x, 0);
-        tryPush(x, h - 1);
-      }
-      for (let y = 0; y < h; y++) {
-        tryPush(0, y);
-        tryPush(w - 1, y);
-      }
-      while (stack.length) {
-        const x = stack.pop();
-        const y = stack.pop();
-        const i = (y * w + x) * 4;
-        data[i + 3] = 0;
-        tryPush(x + 1, y);
-        tryPush(x - 1, y);
-        tryPush(x, y + 1);
-        tryPush(x, y - 1);
-      }
-    }
-
-    function stripNearWhitePixels(data, lumThreshold = 215) {
-      for (let i = 0; i < data.length; i += 4) {
-        if (data[i + 3] <= 8) continue;
-        const lum = (data[i] + data[i + 1] + data[i + 2]) / 3;
-        if (lum >= lumThreshold) data[i + 3] = 0;
-      }
-    }
-
-    function getInkPad(srcW, srcH) {
-      return Math.max(8, Math.round(Math.max(srcW, srcH) * INK_PAD_RATIO));
-    }
-
-    function padInkRect(ink, srcW, srcH, extraPad) {
-      const pad = extraPad != null ? extraPad : getInkPad(srcW, srcH);
-      const sx = Math.max(0, ink.sx - pad);
-      const sy = Math.max(0, ink.sy - pad);
-      const sw = Math.min(srcW - sx, ink.sw + pad * 2);
-      const sh = Math.min(srcH - sy, ink.sh + pad * 2);
-      return { sx, sy, sw, sh, srcW, srcH };
-    }
-
-    function getInkBounds(data, w, h, pad, lumMax = 215) {
-      let minX = w;
-      let minY = h;
-      let maxX = -1;
-      let maxY = -1;
-      for (let y = 0; y < h; y++) {
-        for (let x = 0; x < w; x++) {
-          const i = (y * w + x) * 4;
-          if (data[i + 3] <= 12) continue;
-          const lum = (data[i] + data[i + 1] + data[i + 2]) / 3;
-          if (lum >= lumMax) continue;
-          if (x < minX) minX = x;
-          if (y < minY) minY = y;
-          if (x > maxX) maxX = x;
-          if (y > maxY) maxY = y;
-        }
-      }
-      if (maxX < minX) return null;
-      minX = Math.max(0, minX - pad);
-      minY = Math.max(0, minY - pad);
-      maxX = Math.min(w - 1, maxX + pad);
-      maxY = Math.min(h - 1, maxY + pad);
-      return { minX, minY, tw: maxX - minX + 1, th: maxY - minY + 1 };
-    }
-
-    function cropOpaqueBounds(data, w, h, pad) {
-      return getInkBounds(data, w, h, pad, 255);
-    }
-
-    function applyInkRect(img, bounds, srcW, srcH, cropped) {
-      if (!img || !bounds) return img;
-      const raw = cropped
-        ? { sx: 0, sy: 0, sw: bounds.tw, sh: bounds.th }
-        : { sx: bounds.minX, sy: bounds.minY, sw: bounds.tw, sh: bounds.th };
-      img.inkRect = padInkRect(raw, cropped ? bounds.tw : srcW, cropped ? bounds.th : srcH);
-      return img;
-    }
-
-    function getInkRect(img, sheetFallback) {
-      if (img && img.inkRect) return img.inkRect;
-      const srcW = img.naturalWidth || img.width || 1;
-      const srcH = img.naturalHeight || img.height || 1;
-      if (sheetFallback && sheetFallback.srcW === srcW && sheetFallback.srcH === srcH) {
-        return attachPresetCenter(padInkRect(sheetFallback, srcW, srcH), sheetFallback);
-      }
-      return { sx: 0, sy: 0, sw: srcW, sh: srcH, srcW, srcH };
-    }
-
-    function drawInkImageSrc(img, ink, dx, dy, dw, dh) {
-      if (!img || !ink) return;
-      ctx.drawImage(img, ink.sx, ink.sy, ink.sw, ink.sh, dx, dy, dw, dh);
-    }
-
-    function drawInkImage(img, x, y, w, h) {
-      drawInkImageSrc(img, getInkRect(img, null), x, y, w, h);
-    }
-
-    function canvasToImage(canvas) {
-      return new Promise((resolve) => {
-        const out = new Image();
-        out.onload = () => resolve(out);
-        out.onerror = () => resolve(null);
-        out.src = canvas.toDataURL('image/png');
-      });
-    }
-
-    function processInkImageAsync(img, threshold = 210) {
-      return new Promise((resolve) => {
-        try {
-          const w = img.naturalWidth;
-          const h = img.naturalHeight;
-          if (!w || !h) {
-            resolve(img);
-            return;
-          }
-
-          const canvas = document.createElement('canvas');
-          canvas.width = w;
-          canvas.height = h;
-          const ctx = canvas.getContext('2d');
-          ctx.drawImage(img, 0, 0);
-          const frame = ctx.getImageData(0, 0, w, h);
-
-          const cropPad = getInkPad(w, h);
-
-          floodRemoveBackground(frame.data, w, h, threshold);
-          applyWhiteKnockout(frame.data, threshold);
-          stripNearWhitePixels(frame.data, threshold + 8);
-
-          let bounds = getInkBounds(frame.data, w, h, cropPad, threshold + 8);
-          if (!bounds) {
-            applyWhiteKnockout(frame.data, 198);
-            stripNearWhitePixels(frame.data, 205);
-            bounds = getInkBounds(frame.data, w, h, cropPad, 210);
-          }
-          if (!bounds) {
-            ctx.drawImage(img, 0, 0);
-            const raw = ctx.getImageData(0, 0, w, h);
-            bounds = getInkBounds(raw.data, w, h, cropPad, 215);
-            if (bounds) {
-              applyInkRect(img, bounds, w, h, false);
-              resolve(img);
-              return;
-            }
-            resolve(img);
-            return;
-          }
-
-          ctx.putImageData(frame, 0, 0);
-
-          const out = document.createElement('canvas');
-          out.width = bounds.tw;
-          out.height = bounds.th;
-          out.getContext('2d').drawImage(
-            canvas,
-            bounds.minX, bounds.minY, bounds.tw, bounds.th,
-            0, 0, bounds.tw, bounds.th
-          );
-
-          canvasToImage(out).then((processed) => {
-            const finalImg = processed || img;
-            applyInkRect(finalImg, bounds, w, h, !!processed);
-            resolve(finalImg);
-          });
-        } catch (err) {
-          resolve(img);
-        }
-      });
     }
 
     function getEffectiveDifficulty() {
