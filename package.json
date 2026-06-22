@@ -3,10 +3,11 @@
   "private": true,
   "description": "화살베기 — HTML5 패리 게임",
   "scripts": {
+    "favicon": "node tools/process-favicon.js",
     "deploy": "vercel deploy --prod --yes",
     "deploy:preview": "vercel deploy --yes"
   },
   "devDependencies": {
-    "pngjs": "^7.0.0"
+    "sharp": "^0.35.2"
   }
 }
