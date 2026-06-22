@@ -1111,6 +1111,8 @@
     const ARROW_TRAVEL_FAST_MAX = 0.48;
     const COUNT_FAST_THRESHOLD = 40;
     const COMBO_SOFT_CAP = 40;
+    const FAKE_COMBO_THRESHOLD = 40;
+    const FAKE_SPAWN_CHANCE = 0.36;
     const PLAYER_HIT_RADIUS = 14;
     const GUIDE_SHOW_TIME = 3;
     const ATTACKS_START_TIME = GUIDE_SHOW_TIME;
@@ -1139,6 +1141,7 @@
     let screenFlash = 0;
     let spawnTimer = 0;
     let spawnInterval = 2;
+    let spawnBurstLeft = 0;
     let difficulty = 1;
     let lastTime = 0;
     let gameTime = 0;
@@ -1435,21 +1438,56 @@
 
     function scheduleNextSpawn() {
       const d = getEffectiveDifficulty();
-      let minGap, maxGap;
+      const tension = Math.min(1,
+        (combo / FAKE_COMBO_THRESHOLD) * 0.5
+        + (gameTime / 100) * 0.35
+        + ((d - 1) / (DIFFICULTY_MAX - 1)) * 0.2
+      );
 
-      if (d < 1.8) {
-        minGap = 2.2; maxGap = 4.0;
-      } else if (d < 2.8) {
-        minGap = 1.6; maxGap = 3.0;
-      } else if (d < 3.8) {
-        minGap = 1.1; maxGap = 2.2;
-      } else if (d < 4.5) {
-        minGap = 0.75; maxGap = 1.5;
-      } else {
-        minGap = 0.55; maxGap = 1.0;
+      if (spawnBurstLeft > 0) {
+        spawnBurstLeft--;
+        const burstMin = 0.32 - tension * 0.16;
+        const burstMax = 0.72 - tension * 0.32;
+        spawnInterval = burstMin + Math.random() * (burstMax - burstMin);
+        return;
       }
 
-      spawnInterval = minGap + Math.random() * (maxGap - minGap);
+      const roll = Math.random();
+      const burstChance = 0.12 + tension * 0.22;
+
+      if (roll < burstChance) {
+        spawnBurstLeft = 1 + Math.floor(Math.random() * (2 + tension * 3));
+        spawnInterval = 0.32 + Math.random() * 0.34;
+        return;
+      }
+
+      if (roll < 0.48) {
+        let minGap, maxGap;
+        if (d < 1.8) {
+          minGap = 1.0; maxGap = 2.2;
+        } else if (d < 2.8) {
+          minGap = 0.7; maxGap = 1.6;
+        } else if (d < 3.8) {
+          minGap = 0.55; maxGap = 1.3;
+        } else if (d < 4.5) {
+          minGap = 0.42; maxGap = 1.0;
+        } else {
+          minGap = 0.35; maxGap = 0.85;
+        }
+        spawnInterval = minGap + Math.random() * (maxGap - minGap);
+        return;
+      }
+
+      const longMin = 0.85 + (1 - tension) * 0.9;
+      spawnInterval = longMin + Math.random() * (3.0 - longMin);
+    }
+
+    function isFakeEligible() {
+      return combo >= FAKE_COMBO_THRESHOLD;
+    }
+
+    function rollFakeArrow() {
+      return isFakeEligible() && Math.random() < FAKE_SPAWN_CHANCE;
     }
 
     function showGameOverPanel() {
@@ -1731,6 +1769,7 @@
       parryTimer = 0;
       screenFlash = 0;
       spawnTimer = 0;
+      spawnBurstLeft = 0;
       scheduleNextSpawn();
       difficulty = 1;
       gameTime = 0;
@@ -2007,6 +2046,7 @@
       const dx = cc.x - x;
       const dy = cc.y - y;
       const travelTime = getArrowTravelTime();
+      const isFake = rollFakeArrow();
 
       attacks.push({
         startX: x,
@@ -2020,7 +2060,8 @@
         length: s(88),
         thickness: s(8),
         alive: true,
-        parried: false
+        parried: false,
+        fake: isFake
       });
     }
 
@@ -2130,7 +2171,18 @@
       });
     }
 
+    function punishFakeParry(attack) {
+      attack.alive = false;
+      attack.parried = false;
+      screenFlash = 0.06;
+      spawnSparkParticles(attack.x, attack.y, attack.angle + Math.PI);
+    }
+
     function perfectParry(attack) {
+      if (attack.fake) {
+        punishFakeParry(attack);
+        return;
+      }
       spawnBrokenStick(attack);
       attack.alive = false;
       attack.parried = true;
@@ -2221,7 +2273,7 @@
 
         if (dist <= getBodyHitRadius()) {
           atk.alive = false;
-          takeHit();
+          if (!atk.fake) takeHit();
         }
       }
     }
@@ -2331,6 +2383,27 @@
       ctx.save();
       ctx.translate(atk.x, atk.y);
       ctx.rotate(atk.angle);
+
+      if (atk.fake) {
+        ctx.globalAlpha = 0.44;
+        ctx.strokeStyle = '#bdbdbd';
+        ctx.setLineDash([s(6), s(5)]);
+        ctx.lineWidth = atk.thickness * 0.55;
+        ctx.lineCap = 'round';
+        ctx.beginPath();
+        ctx.moveTo(-atk.length * 0.55, 0);
+        ctx.lineTo(atk.length * 0.35, 0);
+        ctx.stroke();
+        ctx.lineWidth = atk.thickness;
+        ctx.beginPath();
+        ctx.moveTo(atk.length * 0.18, 0);
+        ctx.lineTo(atk.length * 0.45, 0);
+        ctx.stroke();
+        ctx.setLineDash([]);
+        ctx.globalAlpha = 1;
+        ctx.restore();
+        return;
+      }
 
       // 화살 속도에 따라 색상 결정
       // travelTime 짧을수록 위협적인 색
