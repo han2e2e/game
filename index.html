@@ -680,6 +680,15 @@
       <div class="game-over-panel">
         <h2>GAME&nbsp;OVER</h2>
         <p class="final-score" id="final-score">카운트 : 0개&nbsp;&nbsp;최대콤보 : 0개</p>
+        <p class="final-rank" id="final-rank" style="
+          color: #111;
+          font-size: clamp(14px, 2.8vw, 22px);
+          font-weight: 400;
+          letter-spacing: clamp(2px, 0.5vw, 4px);
+          opacity: 0.55;
+          margin: 0;
+          white-space: nowrap;
+        ">순위 확인 중...</p>
         <div class="game-over-actions">
           <button class="game-over-btn" id="btn-retry" type="button">다시하기</button>
           <button class="game-over-btn" id="btn-goto-rank" type="button">랭킹 보기</button>
@@ -933,6 +942,46 @@
       const ctx = getAudioCtx();
       const barDur = BGM_BEAT * 4;
 
+      // 난이도에 따라 볼륨 조정 (0.18 → 최대 0.30)
+      const d = getEffectiveDifficulty();
+      const targetVol = 0.18 + (d - 1) / (DIFFICULTY_MAX - 1) * 0.12;
+      if (bgmGain) {
+        bgmGain.gain.linearRampToValueAtTime(
+          Math.min(0.30, targetVol),
+          startTime + barDur
+        );
+      }
+
+      // difficulty 3.5 이상에서 하이햇 추가 (8분음표)
+      if (d >= 3.5) {
+        [0, 0.5, 1, 1.5, 2, 2.5, 3, 3.5].forEach(function (beat) {
+          const t = startTime + beat * BGM_BEAT;
+          const dur = 0.06;
+          const buf = ctx.createBuffer(
+            1, Math.floor(ctx.sampleRate * dur), ctx.sampleRate
+          );
+          const data = buf.getChannelData(0);
+          for (let i = 0; i < data.length; i++) {
+            data[i] = (Math.random() * 2 - 1) *
+              Math.pow(1 - i / data.length, 3.5);
+          }
+          const src = ctx.createBufferSource();
+          src.buffer = buf;
+          const hpf = ctx.createBiquadFilter();
+          hpf.type = 'highpass';
+          hpf.frequency.value = 6000;
+          const g = ctx.createGain();
+          const vol = Math.min(0.18, 0.08 + (d - 3.5) * 0.06);
+          g.gain.setValueAtTime(vol, t);
+          g.gain.linearRampToValueAtTime(0, t + dur);
+          src.connect(hpf);
+          hpf.connect(g);
+          g.connect(bgmGain);
+          src.start(t);
+          src.stop(t + dur);
+        });
+      }
+
       [noteFreq(33), noteFreq(40)].forEach(function (freq, i) {
         const osc = ctx.createOscillator();
         osc.type = 'sawtooth';
@@ -1055,7 +1104,7 @@
     const PLAYER_FOOT_OFFSET = 90;
     const PARRY_WINDOW = 0.14;
     const PARRY_WINDOW_MOBILE = 0.18;
-    const DIFFICULTY_MAX = 5;
+    const DIFFICULTY_MAX = 5;  // 기존과 동일, 확인용
     const ARROW_TRAVEL_MIN = 0.42;
     const ARROW_TRAVEL_MAX = 0.68;
     const ARROW_TRAVEL_FAST_MAX = 0.48;
@@ -1092,6 +1141,8 @@
     let difficulty = 1;
     let lastTime = 0;
     let gameTime = 0;
+    let countdownVal = 0;       // 3,2,1,0 — 0이면 표시 안 함
+    let countdownTimer = 0;
     let comboPop = 0;
 
     let charState = 'idle';
@@ -1362,36 +1413,59 @@
     }
 
     function getComboDiffBonus() {
-      if (combo >= 20) return 0.012;
-      if (combo >= 10) return 0.020;
-      return 0.010;
+      // 콤보 보너스는 아주 작게 — 시간이 주 상승 요인
+      if (combo >= 20) return 0.008;
+      if (combo >= 10) return 0.015;
+      return 0.008;
     }
 
     function scheduleNextSpawn() {
       const d = getEffectiveDifficulty();
-
       let minGap, maxGap;
 
-      if (d < 1.5) {
-        minGap = 1.8; maxGap = 3.5;
-      } else if (d < 2.5) {
-        minGap = 1.4; maxGap = 2.8;
-      } else if (d < 3.5) {
-        minGap = 1.0; maxGap = 2.0;
+      if (d < 1.8) {
+        minGap = 2.2; maxGap = 4.0;
+      } else if (d < 2.8) {
+        minGap = 1.6; maxGap = 3.0;
+      } else if (d < 3.8) {
+        minGap = 1.1; maxGap = 2.2;
       } else if (d < 4.5) {
-        minGap = 0.7; maxGap = 1.4;
+        minGap = 0.75; maxGap = 1.5;
       } else {
-        minGap = 0.5; maxGap = 1.0;
+        minGap = 0.55; maxGap = 1.0;
       }
 
       spawnInterval = minGap + Math.random() * (maxGap - minGap);
     }
 
     function showGameOverPanel() {
-      finalScoreEl.textContent = '카운트 : ' + cutCount + '개\u00A0\u00A0최대콤보 : ' + maxCombo + '개';
+      finalScoreEl.textContent =
+        '카운트 : ' + cutCount + '개\u00A0\u00A0최대콤보 : ' + maxCombo + '개';
       gameOverEl.classList.add('show');
       stopBGM();
       updateLandscapeHint();
+
+      // 예상 순위 비동기 표시
+      const rankEl = document.getElementById('final-rank');
+      if (rankEl) {
+        rankEl.textContent = '순위 확인 중...';
+        const client = initSupabase();
+        if (client && (currentCount > 0 || maxCombo > 0)) {
+          getProjectedRank(client, currentCount, maxCombo)
+            .then((rank) => {
+              if (rank != null && rankEl) {
+                rankEl.textContent = '예상 순위 : ' + rank + '위';
+              } else if (rankEl) {
+                rankEl.textContent = '';
+              }
+            })
+            .catch(() => {
+              if (rankEl) rankEl.textContent = '';
+            });
+        } else {
+          rankEl.textContent = '';
+        }
+      }
     }
 
     function hideGameOverPanel() {
@@ -1646,6 +1720,8 @@
       scheduleNextSpawn();
       difficulty = 1;
       gameTime = 0;
+      countdownVal = 3;
+      countdownTimer = 0;
       comboPop = 0;
       gameOver = false;
       attacks.length = 0;
@@ -1830,9 +1906,10 @@
     }
 
     function spawnAttack() {
+      if (countdownVal > 0) return;
       const aliveCount = attacks.filter(a => a.alive).length;
       if (aliveCount > 0) {
-        spawnTimer = spawnInterval * 0.6;
+        spawnTimer = spawnInterval * 0.5;
         return;
       }
       _spawnSingleArrow();
@@ -1841,31 +1918,36 @@
     function getArrowTravelTime() {
       const d = getEffectiveDifficulty();
 
-      if (d < 1.5) {
-        const isFast = Math.random() < 0.25;
+      if (d < 1.8) {
+        // 초반 (~30초): 느린 화살 주력, 가끔 빠른 화살로 긴장감
+        const isFast = Math.random() < 0.20;
         return isFast
-          ? 0.50 + Math.random() * 0.15
-          : 1.10 + Math.random() * 0.50;
+          ? 0.58 + Math.random() * 0.12   // 빠른 (가끔)
+          : 1.20 + Math.random() * 0.40;  // 느린 (주력)
       }
 
-      if (d < 2.5) {
+      if (d < 2.8) {
+        // 중초반 (~60초): 느린/보통/빠른 골고루
         const r = Math.random();
-        if (r < 0.20) return 0.45 + Math.random() * 0.10;
-        if (r < 0.55) return 0.72 + Math.random() * 0.20;
-        return 0.95 + Math.random() * 0.35;
+        if (r < 0.25) return 0.52 + Math.random() * 0.10; // 빠른
+        if (r < 0.60) return 0.78 + Math.random() * 0.18; // 보통
+        return 1.00 + Math.random() * 0.30;                // 느린
       }
 
-      if (d < 3.5) {
+      if (d < 3.8) {
+        // 중반 (~100초): 보통~빠른 위주
         const r = Math.random();
-        if (r < 0.40) return 0.42 + Math.random() * 0.10;
-        return 0.65 + Math.random() * 0.18;
+        if (r < 0.45) return 0.46 + Math.random() * 0.10; // 빠른
+        return 0.68 + Math.random() * 0.16;                // 보통
       }
 
       if (d < 4.5) {
-        return 0.38 + Math.random() * 0.12;
+        // 후반 (~130초): 빠른 위주
+        return 0.40 + Math.random() * 0.10;
       }
 
-      return 0.32 + Math.random() * 0.10;
+      // 최종 (~2분+): 외나무다리 최고속
+      return 0.34 + Math.random() * 0.08;
     }
 
     function getArrowFlightVector(atk) {
@@ -1887,11 +1969,25 @@
     function _spawnSingleArrow() {
       const margin = s(30);
       const edgePadX = letterboxPadX / displayScale;
-      const fromLeft = Math.random() < 0.5;
-      const y = margin + Math.random() * (H * 0.62);
-      const x = fromLeft
-        ? -margin - edgePadX
-        : W + margin + edgePadX;
+
+      // 3방향: 왼쪽 / 오른쪽 / 위쪽
+      // 위쪽 25%, 왼쪽 37.5%, 오른쪽 37.5%
+      const r = Math.random();
+      let x, y;
+
+      if (r < 0.25) {
+        // 위쪽에서 내려옴
+        x = W * 0.2 + Math.random() * W * 0.6;
+        y = -margin;
+      } else if (r < 0.625) {
+        // 왼쪽에서 날아옴
+        x = -margin - edgePadX;
+        y = margin + Math.random() * (H * 0.62);
+      } else {
+        // 오른쪽에서 날아옴
+        x = W + margin + edgePadX;
+        y = margin + Math.random() * (H * 0.62);
+      }
 
       const cc = getCombatCenter();
       const dx = cc.x - x;
@@ -1905,8 +2001,7 @@
         targetY: cc.y,
         travelTime,
         elapsed: 0,
-        x,
-        y,
+        x, y,
         angle: Math.atan2(dy, dx),
         length: s(88),
         thickness: s(8),
@@ -2222,22 +2317,39 @@
       ctx.translate(atk.x, atk.y);
       ctx.rotate(atk.angle);
 
-      ctx.strokeStyle = difficulty >= 3 ? '#333' : '#111';
+      // 화살 속도에 따라 색상 결정
+      // travelTime 짧을수록 위협적인 색
+      const speed = atk.travelTime;
+      let arrowColor;
+      if (speed <= 0.42) {
+        arrowColor = '#111';        // 최고속: 검정 (강조)
+      } else if (speed <= 0.60) {
+        arrowColor = '#333';        // 빠름: 진회색
+      } else if (speed <= 0.90) {
+        arrowColor = '#666';        // 보통: 중간
+      } else {
+        arrowColor = '#999';        // 느림: 연회색 (위협 낮음)
+      }
+
+      ctx.strokeStyle = arrowColor;
       ctx.setLineDash([]);
 
+      // 화살대
       ctx.lineWidth = atk.thickness * 0.55;
       ctx.lineCap = 'round';
       ctx.beginPath();
       ctx.moveTo(-atk.length * 0.55, 0);
-      ctx.lineTo(atk.length * 0.45, 0);
+      ctx.lineTo(atk.length * 0.35, 0);
       ctx.stroke();
 
+      // 화살촉 (굵게)
       ctx.lineWidth = atk.thickness;
       ctx.beginPath();
       ctx.moveTo(atk.length * 0.18, 0);
       ctx.lineTo(atk.length * 0.45, 0);
       ctx.stroke();
 
+      // 화살촉 날
       ctx.lineWidth = atk.thickness * 0.7;
       ctx.beginPath();
       ctx.moveTo(atk.length * 0.45, 0);
@@ -2246,7 +2358,21 @@
       ctx.lineTo(atk.length * 0.22,  atk.thickness * 1.4);
       ctx.stroke();
 
+      // 빠른 화살 — 속도선 추가 (travelTime 0.52 이하)
+      if (speed <= 0.52) {
+        ctx.globalAlpha = 0.25;
+        ctx.lineWidth = atk.thickness * 0.3;
+        const trailLen = atk.length * 0.5;
+        [-atk.thickness * 0.8, atk.thickness * 0.8].forEach(offset => {
+          ctx.beginPath();
+          ctx.moveTo(-atk.length * 0.55, offset);
+          ctx.lineTo(-atk.length * 0.55 - trailLen, offset);
+          ctx.stroke();
+        });
+      }
+
       ctx.setLineDash([]);
+      ctx.globalAlpha = 1;
       ctx.restore();
     }
 
@@ -2276,13 +2402,50 @@
       ctx.fillRect(0, 0, W, H);
     }
 
+    function drawCountdown() {
+      if (countdownVal <= 0) return;
+
+      const label = String(countdownVal);
+      const fontSize = Math.min(W * 0.18, H * 0.22);
+      const t = countdownTimer;
+      const scale = 1 + (1 - t) * 0.35;
+      const alpha = t < 0.7 ? 1 : 1 - (t - 0.7) / 0.3;
+
+      ctx.save();
+      ctx.globalAlpha = alpha * 0.82;
+      ctx.translate(W * 0.5, H * 0.5);
+      ctx.scale(scale, scale);
+      ctx.font = `300 ${fontSize}px ${UI_FONT}`;
+      ctx.fillStyle = '#111';
+      ctx.textAlign = 'center';
+      ctx.textBaseline = 'middle';
+      ctx.fillText(label, 0, 0);
+      ctx.restore();
+    }
+
     function update(dt) {
       if (gameState !== GameState.PLAYING) return;
       if (gameOver) return;
 
+      if (countdownVal > 0) {
+        countdownTimer += dt;
+        if (countdownTimer >= 1.0) {
+          countdownTimer = 0;
+          countdownVal--;
+        }
+      }
+
       gameTime += dt;
 
-      difficulty = Math.min(DIFFICULTY_MAX, difficulty + dt * 0.035);
+      // 0~60초: 천천히 (1→2.5)
+      // 60~120초: 가속 (2.5→4)
+      // 120초~: 마무리 (4→5)
+      const timeRate = gameTime < 60
+        ? 0.025
+        : gameTime < 120
+          ? 0.042
+          : 0.015;
+      difficulty = Math.min(DIFFICULTY_MAX, difficulty + dt * timeRate);
 
       if (parryTimer > 0) {
         parryTimer -= dt;
@@ -2362,6 +2525,7 @@
       drawSlashes();
       drawParticles();
       drawScreenFlash();
+      drawCountdown();
     }
 
     function loop(timestamp) {
